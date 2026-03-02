@@ -132,7 +132,7 @@ export default function HostView() {
             <p className="text-indigo-400 text-sm uppercase tracking-widest font-semibold mb-1">Game PIN</p>
             <p className="text-7xl font-black tracking-widest text-white">{gamePin}</p>
             <p className="text-indigo-300 mt-1 text-sm">
-              Or scan the QR code → <span className="font-mono">localhost:3000/join?pin={gamePin}</span>
+              Or scan the QR code → <span className="font-mono">{window.location.host}/join?pin={gamePin}</span>
             </p>
           </div>
 
