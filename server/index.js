@@ -216,9 +216,13 @@ function endGame(gamePin) {
   setTimeout(() => gameManager.deleteGame(gamePin), 10 * 60 * 1000);
 }
 
-// ─── SPA catch-all (must be after API routes) ────────────────────────────────
+// ─── SPA catch-all (must be after API routes, skip socket.io) ────────────────
 
-app.get('*', (req, res) => {
+app.get('*', (req, res, next) => {
+  // Don't intercept socket.io or API requests
+  if (req.path.startsWith('/socket.io') || req.path.startsWith('/api/')) {
+    return next();
+  }
   const indexPath = path.join(clientBuild, 'index.html');
   res.sendFile(indexPath, (err) => {
     if (err) res.status(404).send('Not found');
