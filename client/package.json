@@ -1,0 +1,25 @@
+{
+  "name": "quiz-app-client",
+  "version": "1.0.0",
+  "description": "Kahoot-style real-time quiz app client",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port 3000",
+    "start": "vite --port 3000",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.15.0",
+    "socket.io-client": "^4.6.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.0.4",
+    "autoprefixer": "^10.4.15",
+    "postcss": "^8.4.28",
+    "tailwindcss": "^3.3.3",
+    "vite": "^4.4.9"
+  }
+}
