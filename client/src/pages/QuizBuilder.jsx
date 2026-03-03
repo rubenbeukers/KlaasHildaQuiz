@@ -38,6 +38,12 @@ export default function QuizBuilder() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(isEditing);
 
+  // AI generation state
+  const [aiTopic, setAiTopic] = useState('');
+  const [aiNumQuestions, setAiNumQuestions] = useState(10);
+  const [aiGenerating, setAiGenerating] = useState(false);
+  const [aiError, setAiError] = useState('');
+
   // Load existing quiz for editing
   useEffect(() => {
     if (!isEditing) return;
@@ -198,6 +204,46 @@ export default function QuizBuilder() {
     }
   };
 
+  const handleAiGenerate = async () => {
+    if (!aiTopic.trim()) {
+      setAiError('Vul een onderwerp in');
+      return;
+    }
+
+    setAiGenerating(true);
+    setAiError('');
+
+    try {
+      const res = await fetch(`${SERVER_URL}/api/quizzes/generate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          topic: aiTopic.trim(),
+          numQuestions: aiNumQuestions,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Generatie mislukt');
+
+      // Populate the quiz builder with generated data
+      if (data.title) setTitle(data.title);
+      if (data.questions && data.questions.length > 0) {
+        setQuestions(data.questions);
+        setActiveQ(0);
+      }
+
+      setAiTopic('');
+    } catch (err) {
+      setAiError(err.message);
+    } finally {
+      setAiGenerating(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -303,6 +349,53 @@ export default function QuizBuilder() {
                     </button>
                   ))}
                 </div>
+              </div>
+
+              {/* AI Quiz Generator */}
+              <div className="mb-4 p-3 bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl border border-purple-200">
+                <label className="block text-xs font-semibold text-purple-700 mb-2 uppercase">
+                  ✨ AI Genereren
+                </label>
+                <input
+                  type="text"
+                  value={aiTopic}
+                  onChange={e => setAiTopic(e.target.value)}
+                  className="w-full border-2 border-purple-200 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-purple-500 focus:outline-none mb-2"
+                  placeholder="Bijv. Champions League 2007-2008"
+                  disabled={aiGenerating}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && !aiGenerating) handleAiGenerate();
+                  }}
+                />
+                <div className="flex gap-2 mb-2">
+                  <select
+                    value={aiNumQuestions}
+                    onChange={e => setAiNumQuestions(parseInt(e.target.value))}
+                    className="flex-1 border-2 border-purple-200 rounded-lg px-2 py-1.5 text-xs text-gray-900 focus:border-purple-500 focus:outline-none"
+                    disabled={aiGenerating}
+                  >
+                    {[5, 10, 15, 20].map(n => (
+                      <option key={n} value={n}>{n} vragen</option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={handleAiGenerate}
+                    disabled={aiGenerating || !aiTopic.trim()}
+                    className="flex-1 bg-purple-600 hover:bg-purple-500 disabled:bg-purple-300 text-white font-bold py-1.5 rounded-lg text-xs transition-colors"
+                  >
+                    {aiGenerating ? '⏳ Bezig...' : '✨ Genereer'}
+                  </button>
+                </div>
+                {aiGenerating && (
+                  <div className="text-xs text-purple-600 animate-pulse">
+                    AI genereert vragen over &ldquo;{aiTopic}&rdquo;...
+                  </div>
+                )}
+                {aiError && (
+                  <div className="text-xs text-red-600 mt-1">
+                    {aiError}
+                  </div>
+                )}
               </div>
 
               {/* Question list */}

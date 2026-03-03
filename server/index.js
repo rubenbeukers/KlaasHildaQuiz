@@ -10,6 +10,7 @@ const prisma = require('./db');
 const authRoutes = require('./routes/auth');
 const quizRoutes = require('./routes/quizzes');
 const paymentRoutes = require('./routes/payments');
+const generateRoutes = require('./routes/generate');
 
 const path = require('path');
 
@@ -32,6 +33,7 @@ app.use(express.json());
 
 // API routes
 app.use('/api/auth', authRoutes);
+app.use('/api/quizzes/generate', generateRoutes); // Must be before /api/quizzes to avoid /:id conflict
 app.use('/api/quizzes', quizRoutes);
 app.use('/api/payments', paymentRoutes);
 
