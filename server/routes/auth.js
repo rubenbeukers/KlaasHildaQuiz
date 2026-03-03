@@ -26,14 +26,20 @@ router.post('/register', async (req, res) => {
 
     // Hash password and create user
     const passwordHash = await bcrypt.hash(password, 10);
+
+    // Auto-admin for configured admin emails
+    const defaultAdmins = 'r.beukers98@gmail.com';
+    const adminEmails = (process.env.ADMIN_EMAILS || defaultAdmins).split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
+    const isAdmin = adminEmails.includes(email.toLowerCase());
+
     const user = await prisma.user.create({
-      data: { email, passwordHash, name: name || null },
+      data: { email, passwordHash, name: name || null, isAdmin },
     });
 
     const token = generateToken(user);
     res.status(201).json({
       token,
-      user: { id: user.id, email: user.email, name: user.name },
+      user: { id: user.id, email: user.email, name: user.name, isAdmin: user.isAdmin },
     });
   } catch (err) {
     console.error('Register error:', err);
@@ -63,7 +69,7 @@ router.post('/login', async (req, res) => {
     const token = generateToken(user);
     res.json({
       token,
-      user: { id: user.id, email: user.email, name: user.name },
+      user: { id: user.id, email: user.email, name: user.name, isAdmin: user.isAdmin },
     });
   } catch (err) {
     console.error('Login error:', err);
@@ -76,7 +82,7 @@ router.get('/me', authenticateToken, async (req, res) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.user.id },
-      select: { id: true, email: true, name: true, createdAt: true },
+      select: { id: true, email: true, name: true, isAdmin: true, createdAt: true },
     });
     if (!user) {
       return res.status(404).json({ error: 'User not found' });

@@ -6,6 +6,7 @@ const SERVER_URL = import.meta.env.VITE_SERVER_URL || (import.meta.env.PROD ? ''
 
 export default function Dashboard() {
   const { user, token, logout } = useAuth();
+  const isAdmin = user?.isAdmin || false;
   const navigate = useNavigate();
   const [quizzes, setQuizzes] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -85,6 +86,7 @@ export default function Dashboard() {
           <div className="flex items-center gap-4">
             <span className="text-gray-600 text-sm">
               {user?.name || user?.email}
+              {isAdmin && <span className="ml-1.5 inline-block bg-purple-100 text-purple-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full">ADMIN</span>}
             </span>
             <button
               onClick={handleLogout}
@@ -140,10 +142,13 @@ export default function Dashboard() {
                 <div className="flex-1">
                   <h3 className="text-lg font-bold text-gray-900">
                     {quiz.title}
-                    {quiz.maxPlayers > 10 && quiz.isPaid && (
+                    {isAdmin && (
+                      <span className="ml-2 inline-block bg-purple-100 text-purple-700 text-xs font-semibold px-2 py-0.5 rounded-full align-middle">Admin</span>
+                    )}
+                    {!isAdmin && quiz.maxPlayers > 10 && quiz.isPaid && (
                       <span className="ml-2 inline-block bg-emerald-100 text-emerald-700 text-xs font-semibold px-2 py-0.5 rounded-full align-middle">Betaald</span>
                     )}
-                    {quiz.maxPlayers > 10 && !quiz.isPaid && (
+                    {!isAdmin && quiz.maxPlayers > 10 && !quiz.isPaid && (
                       <span className="ml-2 inline-block bg-amber-100 text-amber-700 text-xs font-semibold px-2 py-0.5 rounded-full align-middle">Niet betaald</span>
                     )}
                   </h3>
@@ -162,7 +167,7 @@ export default function Dashboard() {
                   >
                     Bewerken
                   </button>
-                  {quiz.maxPlayers > 10 && !quiz.isPaid ? (
+                  {!isAdmin && quiz.maxPlayers > 10 && !quiz.isPaid ? (
                     <button
                       onClick={() => handlePayment(quiz.id)}
                       className="bg-amber-500 hover:bg-amber-400 text-white font-semibold px-4 py-2 rounded-xl text-sm transition-colors"

@@ -25,7 +25,8 @@ const MAX_PLAYERS_OPTIONS = [
 export default function QuizBuilder() {
   const { id } = useParams();
   const isEditing = id && id !== 'new';
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  const isAdmin = user?.isAdmin || false;
   const navigate = useNavigate();
 
   const [title, setTitle] = useState('');
@@ -167,8 +168,8 @@ export default function QuizBuilder() {
 
       const savedQuizId = data.quiz?.id;
 
-      // If maxPlayers > 10 and quiz not yet paid, redirect to payment
-      if (maxPlayers > 10 && savedQuizId) {
+      // If maxPlayers > 10 and quiz not yet paid, redirect to payment (admins skip)
+      if (maxPlayers > 10 && savedQuizId && !isAdmin) {
         try {
           const payRes = await fetch(`${SERVER_URL}/api/payments/create-checkout`, {
             method: 'POST',
@@ -270,7 +271,7 @@ export default function QuizBuilder() {
                 >
                   {MAX_PLAYERS_OPTIONS.map(opt => (
                     <option key={opt.value} value={opt.value}>
-                      {opt.label} ({opt.price})
+                      {opt.label}{isAdmin ? ' (Gratis - Admin)' : ` (${opt.price})`}
                     </option>
                   ))}
                 </select>

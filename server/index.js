@@ -74,6 +74,7 @@ io.on('connection', (socket) => {
       const dbQuiz = await prisma.quiz.findUnique({
         where: { id: parseInt(quizId) },
         include: {
+          user: { select: { isAdmin: true } },
           questions: {
             orderBy: { sortOrder: 'asc' },
             include: { options: { orderBy: { sortOrder: 'asc' } } },
@@ -84,8 +85,9 @@ io.on('connection', (socket) => {
       if (!dbQuiz) return callback({ error: 'Quiz not found' });
       if (dbQuiz.questions.length === 0) return callback({ error: 'Quiz has no questions' });
 
-      // Payment enforcement: quizzes with >10 players must be paid
-      if (dbQuiz.maxPlayers > 10 && !dbQuiz.isPaid) {
+      // Payment enforcement: quizzes with >10 players must be paid (admins bypass)
+      const isOwnerAdmin = dbQuiz.user?.isAdmin || false;
+      if (dbQuiz.maxPlayers > 10 && !dbQuiz.isPaid && !isOwnerAdmin) {
         return callback({ error: 'Deze quiz vereist betaling voor meer dan 10 spelers. Ga naar de quiz editor om te betalen.' });
       }
 

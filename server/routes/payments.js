@@ -39,6 +39,16 @@ router.post('/create-checkout', authenticateToken, async (req, res) => {
     });
     if (!quiz) return res.status(404).json({ error: 'Quiz not found' });
 
+    // Check if user is admin - admins get free access to all tiers
+    const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+    if (user?.isAdmin) {
+      await prisma.quiz.update({
+        where: { id: quiz.id },
+        data: { isPaid: true },
+      });
+      return res.json({ free: true });
+    }
+
     const tier = getPriceForPlayers(quiz.maxPlayers);
     if (tier.price === 0) {
       // Free tier, mark as paid directly
