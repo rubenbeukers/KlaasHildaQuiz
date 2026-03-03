@@ -171,4 +171,43 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
+// GET /api/quizzes/history/all - Get all game sessions for current user
+router.get('/history/all', async (req, res) => {
+  try {
+    const sessions = await prisma.gameSession.findMany({
+      where: { userId: req.user.id },
+      include: {
+        quiz: { select: { title: true } },
+        _count: { select: { results: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json({ sessions });
+  } catch (err) {
+    console.error('Get history error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// GET /api/quizzes/history/:sessionId - Get game session results
+router.get('/history/:sessionId', async (req, res) => {
+  try {
+    const session = await prisma.gameSession.findFirst({
+      where: {
+        id: parseInt(req.params.sessionId),
+        userId: req.user.id,
+      },
+      include: {
+        quiz: { select: { title: true } },
+        results: { orderBy: { finalRank: 'asc' } },
+      },
+    });
+    if (!session) return res.status(404).json({ error: 'Session not found' });
+    res.json({ session });
+  } catch (err) {
+    console.error('Get session error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 module.exports = router;

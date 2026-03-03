@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import socket from '../socket.js';
 import Timer from '../components/Timer.jsx';
 import Leaderboard from '../components/Leaderboard.jsx';
@@ -15,7 +15,11 @@ const SERVER_URL = import.meta.env.VITE_SERVER_URL || (import.meta.env.PROD ? ''
 
 export default function HostView() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const quizId = searchParams.get('quizId');
   const created = useRef(false);
+  const [error, setError] = useState(null);
+  const [quizTitle, setQuizTitle] = useState('');
 
   // Core state
   const [gameState, setGameState] = useState('creating'); // creating | lobby | countdown | question | questionEnd | finished
@@ -41,12 +45,22 @@ export default function HostView() {
     if (created.current) return;
     created.current = true;
 
-    socket.emit('host:create', ({ gamePin: pin }) => {
-      setGamePin(pin);
+    if (!quizId) {
+      setError('Geen quiz geselecteerd. Ga naar je dashboard om een quiz te starten.');
+      return;
+    }
+
+    socket.emit('host:create', { quizId: parseInt(quizId) }, (response) => {
+      if (response.error) {
+        setError(response.error);
+        return;
+      }
+      setGamePin(response.gamePin);
+      setQuizTitle(response.quizTitle || '');
       setGameState('lobby');
 
       const clientHost = window.location.host;
-      fetch(`${SERVER_URL}/api/qrcode/${pin}?host=${encodeURIComponent(clientHost)}`)
+      fetch(`${SERVER_URL}/api/qrcode/${response.gamePin}?host=${encodeURIComponent(clientHost)}`)
         .then(r => r.json())
         .then(data => setQrCode(data.qrCode))
         .catch(() => console.warn('QR code fetch failed'));
@@ -114,10 +128,24 @@ export default function HostView() {
   // Render states
   // ─────────────────────────────────────────────────────────────────────────
 
+  if (error) {
+    return (
+      <Screen dark>
+        <div className="text-red-400 text-xl mb-4">{error}</div>
+        <button
+          onClick={() => navigate('/dashboard')}
+          className="bg-indigo-700 hover:bg-indigo-600 text-white px-8 py-3 rounded-full font-bold"
+        >
+          ← Terug naar Dashboard
+        </button>
+      </Screen>
+    );
+  }
+
   if (gameState === 'creating') {
     return (
       <Screen dark>
-        <div className="text-white text-2xl animate-pulse">Creating game...</div>
+        <div className="text-white text-2xl animate-pulse">Game aanmaken...</div>
       </Screen>
     );
   }

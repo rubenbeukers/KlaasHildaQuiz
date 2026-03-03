@@ -6,6 +6,7 @@ const { Server } = require('socket.io');
 const cors = require('cors');
 const QRCode = require('qrcode');
 const GameManager = require('./gameManager');
+const prisma = require('./db');
 const authRoutes = require('./routes/auth');
 const quizRoutes = require('./routes/quizzes');
 
@@ -61,13 +62,33 @@ io.on('connection', (socket) => {
   console.log(`[+] Connected: ${socket.id}`);
 
   // ── HOST: create a new game ──────────────────────────────────────────────
-  socket.on('host:create', (callback) => {
-    const game = gameManager.createGame(socket.id);
-    socket.join(game.pin);
-    socket.data.role = 'host';
-    socket.data.gamePin = game.pin;
-    console.log(`[GAME] Created: ${game.pin} (host: ${socket.id})`);
-    callback({ gamePin: game.pin });
+  socket.on('host:create', async ({ quizId } = {}, callback) => {
+    try {
+      if (!quizId) return callback({ error: 'No quiz selected' });
+
+      const dbQuiz = await prisma.quiz.findUnique({
+        where: { id: parseInt(quizId) },
+        include: {
+          questions: {
+            orderBy: { sortOrder: 'asc' },
+            include: { options: { orderBy: { sortOrder: 'asc' } } },
+          },
+        },
+      });
+
+      if (!dbQuiz) return callback({ error: 'Quiz not found' });
+      if (dbQuiz.questions.length === 0) return callback({ error: 'Quiz has no questions' });
+
+      const game = gameManager.createGame(socket.id, dbQuiz);
+      socket.join(game.pin);
+      socket.data.role = 'host';
+      socket.data.gamePin = game.pin;
+      console.log(`[GAME] Created: ${game.pin} quiz="${dbQuiz.title}" (host: ${socket.id})`);
+      callback({ gamePin: game.pin, quizTitle: dbQuiz.title, maxPlayers: dbQuiz.maxPlayers });
+    } catch (err) {
+      console.error('host:create error:', err);
+      callback({ error: 'Failed to create game' });
+    }
   });
 
   // ── PLAYER: join a game ──────────────────────────────────────────────────
@@ -78,6 +99,11 @@ io.on('connection', (socket) => {
     if (game.status !== 'lobby') return callback({ error: 'This game has already started.' });
     if (!nickname || nickname.trim().length === 0) return callback({ error: 'Please enter a nickname.' });
     if (nickname.trim().length > 20) return callback({ error: 'Nickname too long (max 20 chars).' });
+
+    // Check max players
+    if (game.players.size >= (game.maxPlayers || 10)) {
+      return callback({ error: `Game is full (max ${game.maxPlayers || 10} players).` });
+    }
 
     const existing = gameManager.getPlayers(gamePin);
     if (existing.some(p => p.nickname.toLowerCase() === nickname.trim().toLowerCase())) {
@@ -210,7 +236,7 @@ function endQuestion(gamePin) {
   console.log(`[Q${game.currentQuestion + 1}] Ended in game ${gamePin}`);
 }
 
-function endGame(gamePin) {
+async function endGame(gamePin) {
   const game = gameManager.getGame(gamePin);
   if (!game) return;
 
@@ -219,6 +245,30 @@ function endGame(gamePin) {
 
   io.to(gamePin).emit('game:end', { finalLeaderboard });
   console.log(`[GAME] Ended: ${gamePin}`);
+
+  // Save results to database
+  if (game.quizId && game.userId) {
+    try {
+      const results = gameManager.getGameResults(gamePin);
+      await prisma.gameSession.create({
+        data: {
+          quizId: game.quizId,
+          userId: game.userId,
+          pin: gamePin,
+          status: 'finished',
+          playerCount: game.players.size,
+          startedAt: new Date(),
+          endedAt: new Date(),
+          results: {
+            create: results || [],
+          },
+        },
+      });
+      console.log(`[DB] Saved results for game ${gamePin}`);
+    } catch (err) {
+      console.error('[DB] Failed to save game results:', err);
+    }
+  }
 
   // Clean up after 10 minutes
   setTimeout(() => gameManager.deleteGame(gamePin), 10 * 60 * 1000);

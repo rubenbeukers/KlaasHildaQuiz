@@ -76,12 +76,20 @@ export default function Dashboard() {
       <main className="max-w-6xl mx-auto px-6 py-8">
         <div className="flex items-center justify-between mb-8">
           <h2 className="text-2xl font-black text-gray-900">Mijn Quizzen</h2>
-          <button
-            onClick={() => navigate('/quiz/new')}
-            className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-6 py-3 rounded-xl transition-colors"
-          >
-            + Nieuwe Quiz
-          </button>
+          <div className="flex gap-3">
+            <button
+              onClick={() => navigate('/history')}
+              className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold px-6 py-3 rounded-xl transition-colors"
+            >
+              Historie
+            </button>
+            <button
+              onClick={() => navigate('/quiz/new')}
+              className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-6 py-3 rounded-xl transition-colors"
+            >
+              + Nieuwe Quiz
+            </button>
+          </div>
         </div>
 
         {loading ? (

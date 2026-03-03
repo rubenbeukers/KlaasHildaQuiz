@@ -1,5 +1,3 @@
-const { defaultQuiz } = require('./quizData');
-
 class GameManager {
   constructor() {
     this.games = new Map();
@@ -13,19 +11,46 @@ class GameManager {
     return pin;
   }
 
-  createGame(hostSocketId) {
+  // Convert DB quiz format to game format
+  formatQuizForGame(dbQuiz) {
+    return {
+      id: dbQuiz.id,
+      title: dbQuiz.title,
+      questions: dbQuiz.questions.map(q => {
+        const correctIndices = q.options
+          .map((o, i) => (o.isCorrect ? i : -1))
+          .filter(i => i >= 0);
+
+        return {
+          id: q.id,
+          text: q.text,
+          type: q.type || 'single',
+          options: q.options.map(o => o.text),
+          correct: q.type === 'multiple' ? correctIndices : correctIndices[0],
+          timeLimit: q.timeLimit || 20,
+        };
+      }),
+    };
+  }
+
+  createGame(hostSocketId, dbQuiz) {
     const pin = this.generatePin();
+    const quiz = dbQuiz ? this.formatQuizForGame(dbQuiz) : null;
+
     const game = {
       pin,
       hostSocketId,
-      players: new Map(),       // socketId -> player object
-      status: 'lobby',          // lobby | active | finished
+      quizId: dbQuiz ? dbQuiz.id : null,
+      userId: dbQuiz ? dbQuiz.userId : null,
+      maxPlayers: dbQuiz ? dbQuiz.maxPlayers : 10,
+      players: new Map(),
+      status: 'lobby',
       currentQuestion: -1,
-      quiz: defaultQuiz,
-      answers: new Map(),       // questionIndex -> Map(socketId -> answerData)
+      quiz,
+      answers: new Map(),
       questionTimer: null,
       questionEnded: false,
-      questionStartTime: null
+      questionStartTime: null,
     };
     this.games.set(pin, game);
     return game;
@@ -50,7 +75,8 @@ class GameManager {
       nickname,
       score: 0,
       streak: 0,
-      lastAnswerCorrect: false
+      lastAnswerCorrect: false,
+      correctCount: 0,
     };
     game.players.set(socketId, player);
     return { ...player };
@@ -68,7 +94,7 @@ class GameManager {
     return Array.from(game.players.values()).map(p => ({
       id: p.id,
       nickname: p.nickname,
-      score: p.score
+      score: p.score,
     }));
   }
 
@@ -97,7 +123,7 @@ class GameManager {
     if (qIndex < 0) return null;
 
     const answers = game.answers.get(qIndex);
-    if (!answers || answers.has(socketId)) return null; // already answered
+    if (!answers || answers.has(socketId)) return null;
 
     const question = game.quiz.questions[qIndex];
     const player = game.players.get(socketId);
@@ -105,7 +131,15 @@ class GameManager {
 
     const elapsed = (Date.now() - game.questionStartTime) / 1000;
     const timeRatio = Math.max(0, 1 - elapsed / question.timeLimit);
-    const isCorrect = answerIndex === question.correct;
+
+    let isCorrect;
+    if (question.type === 'multiple' && Array.isArray(question.correct)) {
+      const submitted = Array.isArray(answerIndex) ? answerIndex.sort() : [answerIndex];
+      const correct = [...question.correct].sort();
+      isCorrect = submitted.length === correct.length && submitted.every((v, i) => v === correct[i]);
+    } else {
+      isCorrect = answerIndex === question.correct;
+    }
 
     let points = 0;
     if (isCorrect) {
@@ -116,6 +150,7 @@ class GameManager {
       }
       player.score += points;
       player.lastAnswerCorrect = true;
+      player.correctCount += 1;
     } else {
       player.streak = 0;
       player.lastAnswerCorrect = false;
@@ -127,7 +162,7 @@ class GameManager {
       isCorrect,
       points,
       score: player.score,
-      streak: player.streak
+      streak: player.streak,
     };
   }
 
@@ -145,7 +180,7 @@ class GameManager {
     const answers = game.answers.get(game.currentQuestion);
     return {
       count: answers ? answers.size : 0,
-      total: game.players.size
+      total: game.players.size,
     };
   }
 
@@ -157,7 +192,11 @@ class GameManager {
 
     const counts = [0, 0, 0, 0];
     answers.forEach(({ answerIndex }) => {
-      if (answerIndex >= 0 && answerIndex < 4) counts[answerIndex]++;
+      if (Array.isArray(answerIndex)) {
+        answerIndex.forEach(i => { if (i >= 0 && i < 4) counts[i]++; });
+      } else if (answerIndex >= 0 && answerIndex < 4) {
+        counts[answerIndex]++;
+      }
     });
 
     return { counts, totalAnswers: answers.size };
@@ -173,8 +212,23 @@ class GameManager {
         nickname: player.nickname,
         score: player.score,
         id: player.id,
-        streak: player.streak
+        streak: player.streak,
+        correctCount: player.correctCount,
       }));
+  }
+
+  getGameResults(pin) {
+    const game = this.games.get(pin);
+    if (!game) return null;
+    const totalQuestions = game.quiz ? game.quiz.questions.length : 0;
+    const leaderboard = this.getLeaderboard(pin);
+    return leaderboard.map(p => ({
+      nickname: p.nickname,
+      finalScore: p.score,
+      finalRank: p.rank,
+      correctCount: p.correctCount,
+      totalQuestions,
+    }));
   }
 
   setStatus(pin, status) {
