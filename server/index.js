@@ -94,7 +94,7 @@ io.on('connection', (socket) => {
       socket.data.role = 'host';
       socket.data.gamePin = game.pin;
       console.log(`[GAME] Created: ${game.pin} quiz="${dbQuiz.title}" (host: ${socket.id})`);
-      callback({ gamePin: game.pin, quizTitle: dbQuiz.title, maxPlayers: dbQuiz.maxPlayers });
+      callback({ gamePin: game.pin, quizTitle: dbQuiz.title, maxPlayers: dbQuiz.maxPlayers, theme: dbQuiz.theme || 'default' });
     } catch (err) {
       console.error('host:create error:', err);
       callback({ error: 'Failed to create game' });
@@ -141,7 +141,7 @@ io.on('connection', (socket) => {
     if (game.players.size === 0) return;
 
     gameManager.startGame(gamePin);
-    io.to(gamePin).emit('game:started');
+    io.to(gamePin).emit('game:started', { theme: game.quiz?.theme || 'default' });
     console.log(`[GAME] Started: ${gamePin}`);
 
     // Show first question after 3-second countdown
@@ -219,7 +219,9 @@ function showQuestion(gamePin, questionIndex) {
     total: game.quiz.questions.length,
     text: question.text,
     options: question.options,
-    timeLimit: question.timeLimit
+    timeLimit: question.timeLimit,
+    background: question.background || null,
+    theme: game.quiz.theme || 'default',
   });
 
   console.log(`[Q${questionIndex + 1}] Shown in game ${gamePin}`);

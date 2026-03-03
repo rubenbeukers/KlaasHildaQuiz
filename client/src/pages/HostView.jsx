@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import socket from '../socket.js';
 import Timer from '../components/Timer.jsx';
 import Leaderboard from '../components/Leaderboard.jsx';
+import { getTheme } from '../themes.js';
 
 const ANSWERS = [
   { bg: 'bg-red-500',    icon: '▲', label: 'A' },
@@ -13,6 +14,15 @@ const ANSWERS = [
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || (import.meta.env.PROD ? '' : 'http://localhost:4000');
 
+// Build a CSS style object from a background string (gradient or image URL)
+function bgStyle(bg) {
+  if (!bg) return {};
+  if (bg.startsWith('http')) {
+    return { backgroundImage: `url(${bg})`, backgroundSize: 'cover', backgroundPosition: 'center' };
+  }
+  return { background: bg };
+}
+
 export default function HostView() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -21,18 +31,23 @@ export default function HostView() {
   const [error, setError] = useState(null);
   const [quizTitle, setQuizTitle] = useState('');
 
+  // Theme state
+  const [themeKey, setThemeKey] = useState('default');
+  const theme = getTheme(themeKey);
+
   // Core state
-  const [gameState, setGameState] = useState('creating'); // creating | lobby | countdown | question | questionEnd | finished
+  const [gameState, setGameState] = useState('creating');
   const [gamePin, setGamePin] = useState(null);
   const [qrCode, setQrCode] = useState(null);
   const [players, setPlayers] = useState([]);
 
   // Question state
-  const [question, setQuestion] = useState(null);   // { text, options, timeLimit }
+  const [question, setQuestion] = useState(null);
   const [questionIndex, setQuestionIndex] = useState(0);
   const [totalQuestions, setTotalQuestions] = useState(0);
   const [answerCount, setAnswerCount] = useState({ count: 0, total: 0 });
   const [countdown, setCountdown] = useState(3);
+  const [questionBg, setQuestionBg] = useState(null);
 
   // Results state
   const [correctAnswer, setCorrectAnswer] = useState(null);
@@ -57,6 +72,7 @@ export default function HostView() {
       }
       setGamePin(response.gamePin);
       setQuizTitle(response.quizTitle || '');
+      if (response.theme) setThemeKey(response.theme);
       setGameState('lobby');
 
       const clientHost = window.location.host;
@@ -67,16 +83,18 @@ export default function HostView() {
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Socket event listeners (separate so StrictMode re-adds them) ──────────
+  // ── Socket event listeners ──────────────────────────────────────────────
   useEffect(() => {
     function onPlayerJoined({ players }) { setPlayers(players); }
-    function onQuestionShow({ index, total, text, options, timeLimit }) {
+    function onQuestionShow({ index, total, text, options, timeLimit, background, theme: qTheme }) {
       setQuestion({ text, options, timeLimit });
       setQuestionIndex(index);
       setTotalQuestions(total);
       setCorrectAnswer(null);
       setResults(null);
       setAnswerCount({ count: 0, total: 0 });
+      setQuestionBg(background || null);
+      if (qTheme) setThemeKey(qTheme);
       setGameState('question');
     }
     function onAnswerCount({ count, total }) { setAnswerCount({ count, total }); }
@@ -124,13 +142,19 @@ export default function HostView() {
     socket.emit('next:question', { gamePin });
   };
 
+  // Compute game screen background (question bg takes priority, then theme)
+  const gameScreenStyle = questionBg
+    ? bgStyle(questionBg)
+    : (theme.gameStyle || {});
+  const gameScreenClass = questionBg ? '' : (theme.gameBg || 'bg-gray-900');
+
   // ─────────────────────────────────────────────────────────────────────────
   // Render states
   // ─────────────────────────────────────────────────────────────────────────
 
   if (error) {
     return (
-      <Screen dark>
+      <Screen theme={theme}>
         <div className="text-red-400 text-xl mb-4">{error}</div>
         <button
           onClick={() => navigate('/dashboard')}
@@ -144,7 +168,7 @@ export default function HostView() {
 
   if (gameState === 'creating') {
     return (
-      <Screen dark>
+      <Screen theme={theme}>
         <div className="text-white text-2xl animate-pulse">Game aanmaken...</div>
       </Screen>
     );
@@ -153,14 +177,17 @@ export default function HostView() {
   // ── LOBBY ─────────────────────────────────────────────────────────────────
   if (gameState === 'lobby') {
     return (
-      <div className="min-h-screen bg-indigo-950 text-white flex flex-col">
+      <div
+        className={`min-h-screen ${theme.lobbyBg} text-white flex flex-col`}
+        style={theme.lobbyStyle || {}}
+      >
         {/* Top bar */}
         <div className="flex items-start justify-between p-6 pb-2">
           <div>
-            <p className="text-indigo-400 text-sm uppercase tracking-widest font-semibold mb-1">Game PIN</p>
-            <p className="text-7xl font-black tracking-widest text-white">{gamePin}</p>
-            <p className="text-indigo-300 mt-1 text-sm">
-              Or scan the QR code → <span className="font-mono">{window.location.host}/join?pin={gamePin}</span>
+            <p className={`${theme.textMuted} text-sm uppercase tracking-widest font-semibold mb-1`}>Game PIN</p>
+            <p className={`text-7xl font-black tracking-widest ${theme.pinColor}`}>{gamePin}</p>
+            <p className={`${theme.textSecondary} mt-1 text-sm`}>
+              Of scan de QR code → <span className="font-mono">{window.location.host}/join?pin={gamePin}</span>
             </p>
           </div>
 
@@ -171,16 +198,16 @@ export default function HostView() {
                 <img src={qrCode} alt="QR Code" className="w-44 h-44" />
               </div>
             ) : (
-              <div className="w-44 h-44 bg-indigo-900 rounded-2xl animate-pulse" />
+              <div className="w-44 h-44 bg-black/20 rounded-2xl animate-pulse" />
             )}
           </div>
         </div>
 
         {/* Player count */}
         <div className="px-6 py-2">
-          <p className="text-indigo-300 text-lg">
+          <p className={`${theme.textSecondary} text-lg`}>
             <span className="text-3xl font-black text-white">{players.length}</span>
-            {' '}player{players.length !== 1 ? 's' : ''} joined
+            {' '}speler{players.length !== 1 ? 's' : ''}
           </p>
         </div>
 
@@ -190,7 +217,7 @@ export default function HostView() {
             {players.map(p => (
               <span
                 key={p.id}
-                className="bg-indigo-700 hover:bg-indigo-600 text-white rounded-full px-4 py-2 font-semibold text-sm animate-pop"
+                className={`${theme.playerBadge} hover:brightness-110 text-white rounded-full px-4 py-2 font-semibold text-sm animate-pop`}
               >
                 {p.nickname}
               </span>
@@ -209,7 +236,7 @@ export default function HostView() {
                 : 'bg-gray-700 text-gray-500 cursor-not-allowed'
               }`}
           >
-            {players.length === 0 ? 'Waiting for players...' : `Start Game (${players.length})`}
+            {players.length === 0 ? 'Wachten op spelers...' : `Start Game (${players.length})`}
           </button>
         </div>
       </div>
@@ -219,10 +246,10 @@ export default function HostView() {
   // ── COUNTDOWN ─────────────────────────────────────────────────────────────
   if (gameState === 'countdown') {
     return (
-      <Screen dark>
-        <p className="text-indigo-300 text-2xl mb-4 font-semibold">Get ready!</p>
+      <Screen theme={theme}>
+        <p className={`${theme.textSecondary} text-2xl mb-4 font-semibold`}>Get ready!</p>
         <div className="text-9xl font-black text-white animate-pop" key={countdown}>{countdown || '🚀'}</div>
-        <p className="text-indigo-400 mt-6">{players.length} players connected</p>
+        <p className={`${theme.textMuted} mt-6`}>{players.length} spelers verbonden</p>
       </Screen>
     );
   }
@@ -230,25 +257,28 @@ export default function HostView() {
   // ── QUESTION (projector view) ─────────────────────────────────────────────
   if (gameState === 'question' && question) {
     return (
-      <div className="min-h-screen bg-gray-900 flex flex-col">
+      <div className={`min-h-screen ${gameScreenClass} flex flex-col`} style={gameScreenStyle}>
         {/* Header bar */}
-        <div className="bg-gray-800 flex items-center justify-between px-6 py-3">
+        <div
+          className={`${theme.headerBg || ''} flex items-center justify-between px-6 py-3`}
+          style={theme.headerStyle || (questionBg ? { background: 'rgba(0,0,0,0.5)' } : {})}
+        >
           <div className="text-white font-bold text-lg">
-            Question <span className="text-purple-400">{questionIndex + 1}</span>
-            <span className="text-gray-500"> / {totalQuestions}</span>
+            Vraag <span className="text-purple-400">{questionIndex + 1}</span>
+            <span className="text-gray-400"> / {totalQuestions}</span>
           </div>
           <Timer duration={question.timeLimit} />
           <div className="text-right">
             <p className="text-white font-bold text-2xl tabular-nums">
               {answerCount.count}
-              <span className="text-gray-500 text-base font-normal"> / {answerCount.total}</span>
+              <span className="text-gray-400 text-base font-normal"> / {answerCount.total}</span>
             </p>
-            <p className="text-gray-400 text-xs">answers</p>
+            <p className="text-gray-400 text-xs">antwoorden</p>
           </div>
         </div>
 
         {/* Answer progress bar */}
-        <div className="h-1.5 bg-gray-700">
+        <div className="h-1.5 bg-black/30">
           <div
             className="h-full bg-purple-500 transition-all duration-500"
             style={{ width: answerCount.total > 0 ? `${(answerCount.count / answerCount.total) * 100}%` : '0%' }}
@@ -257,7 +287,7 @@ export default function HostView() {
 
         {/* Question text */}
         <div className="flex-1 flex items-center justify-center px-8 py-6">
-          <div className="bg-white rounded-3xl px-10 py-8 max-w-4xl w-full text-center shadow-2xl">
+          <div className="bg-white/95 backdrop-blur rounded-3xl px-10 py-8 max-w-4xl w-full text-center shadow-2xl">
             <p className="text-4xl font-black text-gray-900 leading-tight">{question.text}</p>
           </div>
         </div>
@@ -285,7 +315,7 @@ export default function HostView() {
   // ── QUESTION END (results) ────────────────────────────────────────────────
   if (gameState === 'questionEnd' && question) {
     return (
-      <div className="min-h-screen bg-gray-900 flex flex-col">
+      <div className={`min-h-screen ${gameScreenClass} flex flex-col`} style={gameScreenStyle}>
         {/* Correct answer banner */}
         <div className={`${correctAnswer !== null ? ANSWERS[correctAnswer].bg : 'bg-gray-700'} p-4 text-center`}>
           <p className="text-white font-black text-2xl">
@@ -296,7 +326,7 @@ export default function HostView() {
         <div className="flex flex-1 gap-4 p-6">
           {/* Answer distribution */}
           <div className="flex-1">
-            <h3 className="text-white font-bold text-lg mb-4">Answer distribution</h3>
+            <h3 className="text-white font-bold text-lg mb-4">Antwoord verdeling</h3>
             <div className="flex items-end gap-3 h-48">
               {question.options.map((opt, i) => {
                 const count = results?.counts[i] ?? 0;
@@ -312,7 +342,7 @@ export default function HostView() {
                       />
                     </div>
                     <span className="text-gray-400 text-xs">{pct}%</span>
-                    <span className={`text-2xl ${ANSWERS[i].textDark ? '' : ''}`}>{ANSWERS[i].icon}</span>
+                    <span className="text-2xl">{ANSWERS[i].icon}</span>
                   </div>
                 );
               })}
@@ -321,7 +351,7 @@ export default function HostView() {
 
           {/* Leaderboard */}
           <div className="w-80">
-            <h3 className="text-white font-bold text-lg mb-4">Leaderboard</h3>
+            <h3 className="text-white font-bold text-lg mb-4">Ranglijst</h3>
             <Leaderboard entries={leaderboard.slice(0, 6)} />
           </div>
         </div>
@@ -332,7 +362,7 @@ export default function HostView() {
             onClick={handleNextQuestion}
             className="bg-purple-600 hover:bg-purple-500 active:bg-purple-700 text-white px-14 py-5 rounded-full text-xl font-black transition-all shadow-lg hover:shadow-xl transform hover:scale-105"
           >
-            {questionIndex + 1 >= totalQuestions ? '🏆 Show Final Results' : 'Next Question →'}
+            {questionIndex + 1 >= totalQuestions ? '🏆 Eindresultaten' : 'Volgende Vraag →'}
           </button>
         </div>
       </div>
@@ -342,19 +372,20 @@ export default function HostView() {
   // ── FINISHED (final podium) ───────────────────────────────────────────────
   if (gameState === 'finished') {
     const top3 = finalLeaderboard.slice(0, 3);
-    const rest = finalLeaderboard.slice(3);
     const podiumConfig = [
       { pos: 1, medal: '🥇', height: 'h-36', bg: 'bg-yellow-400', textColor: 'text-black' },
       { pos: 2, medal: '🥈', height: 'h-24', bg: 'bg-slate-300', textColor: 'text-black' },
       { pos: 3, medal: '🥉', height: 'h-16', bg: 'bg-orange-500', textColor: 'text-white' },
     ];
-    // Reorder for display: 2nd, 1st, 3rd
     const displayOrder = [top3[1], top3[0], top3[2]];
 
     return (
-      <div className="min-h-screen bg-gray-900 flex flex-col items-center p-6 overflow-auto">
+      <div
+        className={`min-h-screen ${theme.gameBg || 'bg-gray-900'} flex flex-col items-center p-6 overflow-auto`}
+        style={theme.gameStyle || {}}
+      >
         <h1 className="text-5xl font-black text-white mb-2 mt-4">Game Over!</h1>
-        <p className="text-gray-400 mb-8">Final Results</p>
+        <p className="text-gray-400 mb-8">Eindresultaten</p>
 
         {/* Podium */}
         <div className="flex items-end gap-2 mb-10">
@@ -381,10 +412,10 @@ export default function HostView() {
         </div>
 
         <button
-          onClick={() => navigate('/')}
+          onClick={() => navigate('/dashboard')}
           className="mt-8 bg-indigo-700 hover:bg-indigo-600 text-white px-10 py-3 rounded-full font-bold transition-all"
         >
-          ← Back to Home
+          ← Terug naar Dashboard
         </button>
       </div>
     );
@@ -394,9 +425,12 @@ export default function HostView() {
 }
 
 // Helper wrapper
-function Screen({ dark, children }) {
+function Screen({ theme, children }) {
   return (
-    <div className={`min-h-screen flex flex-col items-center justify-center ${dark ? 'bg-indigo-950' : 'bg-gray-900'}`}>
+    <div
+      className={`min-h-screen flex flex-col items-center justify-center ${theme?.lobbyBg || 'bg-indigo-950'}`}
+      style={theme?.lobbyStyle || {}}
+    >
       {children}
     </div>
   );

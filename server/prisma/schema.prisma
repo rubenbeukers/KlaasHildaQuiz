@@ -24,6 +24,7 @@ model Quiz {
   title       String
   maxPlayers  Int           @default(10) @map("max_players")
   isPaid      Boolean       @default(false) @map("is_paid")
+  theme       String        @default("default")
   createdAt   DateTime      @default(now()) @map("created_at")
   updatedAt   DateTime      @updatedAt @map("updated_at")
   user        User          @relation(fields: [userId], references: [id])
@@ -36,10 +37,11 @@ model Quiz {
 model Question {
   id        Int            @id @default(autoincrement())
   quizId    Int            @map("quiz_id")
-  text      String
-  type      String         @default("single") // "single" or "multiple"
-  timeLimit Int            @default(20) @map("time_limit")
-  sortOrder Int            @map("sort_order")
+  text       String
+  type       String         @default("single") // "single" or "multiple"
+  timeLimit  Int            @default(20) @map("time_limit")
+  sortOrder  Int            @map("sort_order")
+  background String?        // CSS gradient, color, or image URL for question background
   quiz      Quiz           @relation(fields: [quizId], references: [id], onDelete: Cascade)
   options   AnswerOption[]
 

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { THEME_LIST, QUESTION_BACKGROUNDS } from '../themes';
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || (import.meta.env.PROD ? '' : 'http://localhost:4000');
 
@@ -9,6 +10,7 @@ const EMPTY_QUESTION = () => ({
   text: '',
   type: 'single',
   timeLimit: 20,
+  background: null,
   options: [EMPTY_OPTION(), EMPTY_OPTION(), EMPTY_OPTION(), EMPTY_OPTION()],
 });
 
@@ -28,6 +30,7 @@ export default function QuizBuilder() {
 
   const [title, setTitle] = useState('');
   const [maxPlayers, setMaxPlayers] = useState(10);
+  const [theme, setTheme] = useState('default');
   const [questions, setQuestions] = useState([EMPTY_QUESTION()]);
   const [activeQ, setActiveQ] = useState(0);
   const [saving, setSaving] = useState(false);
@@ -45,11 +48,13 @@ export default function QuizBuilder() {
         if (data.quiz) {
           setTitle(data.quiz.title);
           setMaxPlayers(data.quiz.maxPlayers);
+          setTheme(data.quiz.theme || 'default');
           setQuestions(
             data.quiz.questions.map(q => ({
               text: q.text,
               type: q.type,
               timeLimit: q.timeLimit,
+              background: q.background || null,
               options: q.options.map(o => ({ text: o.text, isCorrect: o.isCorrect })),
             }))
           );
@@ -155,7 +160,7 @@ export default function QuizBuilder() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ title, maxPlayers, questions: cleanQuestions }),
+        body: JSON.stringify({ title, maxPlayers, theme, questions: cleanQuestions }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Opslaan mislukt');
@@ -271,6 +276,34 @@ export default function QuizBuilder() {
                 </select>
               </div>
 
+              {/* Quiz theme */}
+              <div className="mb-4">
+                <label className="block text-xs font-semibold text-gray-500 mb-2 uppercase">
+                  Thema
+                </label>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {THEME_LIST.map(t => (
+                    <button
+                      key={t.key}
+                      onClick={() => setTheme(t.key)}
+                      className={`rounded-lg p-1.5 text-center transition-all ${
+                        theme === t.key
+                          ? 'ring-2 ring-indigo-500 ring-offset-1'
+                          : 'hover:ring-1 hover:ring-gray-300'
+                      }`}
+                    >
+                      <div
+                        className="w-full h-6 rounded-md mb-0.5"
+                        style={{ background: t.preview }}
+                      />
+                      <span className="text-[10px] text-gray-600 font-medium leading-none">
+                        {t.emoji} {t.name}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {/* Question list */}
               <div className="mb-3">
                 <label className="block text-xs font-semibold text-gray-500 mb-2 uppercase">
@@ -281,14 +314,20 @@ export default function QuizBuilder() {
                     <button
                       key={i}
                       onClick={() => setActiveQ(i)}
-                      className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+                      className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center gap-1.5 ${
                         i === activeQ
                           ? 'bg-indigo-100 text-indigo-700 font-semibold'
                           : 'hover:bg-gray-100 text-gray-600'
                       }`}
                     >
-                      <span className="font-mono text-xs mr-2">{i + 1}.</span>
-                      {q.text.trim() || 'Nieuwe vraag...'}
+                      {q.background && (
+                        <span
+                          className="inline-block w-3 h-3 rounded-full flex-shrink-0 ring-1 ring-gray-300"
+                          style={{ background: q.background.startsWith('url(') || q.background.startsWith('http') ? '#8b5cf6' : q.background }}
+                        />
+                      )}
+                      <span className="font-mono text-xs mr-1">{i + 1}.</span>
+                      <span className="truncate">{q.text.trim() || 'Nieuwe vraag...'}</span>
                     </button>
                   ))}
                 </div>
@@ -401,6 +440,41 @@ export default function QuizBuilder() {
                     <span>5s</span>
                     <span>60s</span>
                   </div>
+                </div>
+              </div>
+
+              {/* Question background */}
+              <div className="mb-6">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Achtergrond
+                  <span className="font-normal text-gray-400 ml-1">(wordt getoond bij deze vraag)</span>
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {QUESTION_BACKGROUNDS.map(bg => (
+                    <button
+                      key={bg.key}
+                      onClick={() => updateQuestion(activeQ, { background: bg.css })}
+                      className={`w-14 h-10 rounded-lg transition-all flex items-center justify-center text-[9px] font-bold text-white ${
+                        (q.background || null) === bg.css
+                          ? 'ring-2 ring-indigo-500 ring-offset-2 scale-110'
+                          : 'hover:scale-105 hover:ring-1 hover:ring-gray-300'
+                      }`}
+                      style={{ background: bg.preview }}
+                      title={bg.label}
+                    >
+                      {bg.key === 'none' && <span className="text-gray-400 text-xs">Geen</span>}
+                    </button>
+                  ))}
+                </div>
+                {/* Custom URL input */}
+                <div className="mt-2">
+                  <input
+                    type="text"
+                    value={q.background && !QUESTION_BACKGROUNDS.some(bg => bg.css === q.background) ? q.background : ''}
+                    onChange={e => updateQuestion(activeQ, { background: e.target.value || null })}
+                    className="w-full border-2 border-gray-200 rounded-lg px-3 py-1.5 text-xs focus:border-indigo-500 focus:outline-none"
+                    placeholder="Of plak een afbeelding-URL (bijv. https://...jpg)"
+                  />
                 </div>
               </div>
 

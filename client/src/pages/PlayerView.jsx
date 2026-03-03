@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import socket from '../socket.js';
 import Timer from '../components/Timer.jsx';
+import { getTheme } from '../themes.js';
 
 const ANSWERS = [
   { bg: 'bg-red-500',     activeBg: 'bg-red-700',     icon: '▲', label: 'A' },
@@ -10,6 +11,15 @@ const ANSWERS = [
   { bg: 'bg-emerald-500', activeBg: 'bg-emerald-700', icon: '★', label: 'D' },
 ];
 
+// Build a CSS style object from a background string (gradient or image URL)
+function bgStyle(bg) {
+  if (!bg) return {};
+  if (bg.startsWith('http')) {
+    return { backgroundImage: `url(${bg})`, backgroundSize: 'cover', backgroundPosition: 'center' };
+  }
+  return { background: bg };
+}
+
 export default function PlayerView() {
   const { pin: urlPin } = useParams();
   const [searchParams] = useSearchParams();
@@ -17,7 +27,9 @@ export default function PlayerView() {
 
   // ── State ─────────────────────────────────────────────────────────────────
   const [gameState, setGameState] = useState('join');
-  // join | lobby | countdown | question | answered | questionEnd | finished
+  const [themeKey, setThemeKey] = useState('default');
+  const theme = getTheme(themeKey);
+  const [questionBg, setQuestionBg] = useState(null);
 
   const [gamePin, setGamePin]     = useState(searchParams.get('pin') || urlPin || '');
   const [nickname, setNickname]   = useState('');
@@ -38,15 +50,18 @@ export default function PlayerView() {
 
   // ── Socket events ─────────────────────────────────────────────────────────
   useEffect(() => {
-    socket.on('game:started', () => {
+    socket.on('game:started', ({ theme: t } = {}) => {
+      if (t) setThemeKey(t);
       setGameState('countdown');
     });
 
-    socket.on('question:show', ({ index, total, text, options, timeLimit }) => {
+    socket.on('question:show', ({ index, total, text, options, timeLimit, background, theme: qTheme }) => {
       setQuestion({ text, options, timeLimit, index, total });
       setSelectedAnswer(null);
       setAnswerResult(null);
       setCorrectAnswer(null);
+      setQuestionBg(background || null);
+      if (qTheme) setThemeKey(qTheme);
       setGameState('question');
     });
 
@@ -87,8 +102,8 @@ export default function PlayerView() {
     setError('');
     const trimPin  = gamePin.trim();
     const trimName = nickname.trim();
-    if (!trimPin)  return setError('Please enter the game PIN.');
-    if (!trimName) return setError('Please enter a nickname.');
+    if (!trimPin)  return setError('Vul de Game PIN in.');
+    if (!trimName) return setError('Vul een bijnaam in.');
 
     socket.emit('player:join', { gamePin: trimPin, nickname: trimName }, (res) => {
       if (res.error) return setError(res.error);
@@ -113,6 +128,10 @@ export default function PlayerView() {
     });
   };
 
+  // Compute question background style
+  const qBgStyle = questionBg ? bgStyle(questionBg) : (theme.gameStyle || {});
+  const qBgClass = questionBg ? '' : (theme.gameBg || 'bg-gray-900');
+
   // ─────────────────────────────────────────────────────────────────────────
   // JOIN SCREEN
   // ─────────────────────────────────────────────────────────────────────────
@@ -122,7 +141,7 @@ export default function PlayerView() {
         <div className="bg-white rounded-3xl p-8 w-full max-w-sm shadow-2xl animate-slide-up">
           <div className="text-center mb-6">
             <span className="text-5xl">⚡</span>
-            <h1 className="text-3xl font-black text-indigo-900 mt-2">Join Quiz</h1>
+            <h1 className="text-3xl font-black text-indigo-900 mt-2">Meedoen</h1>
           </div>
 
           {error && (
@@ -142,12 +161,12 @@ export default function PlayerView() {
             maxLength={6}
           />
 
-          <label className="block text-gray-700 font-bold mb-1 text-sm">Your nickname</label>
+          <label className="block text-gray-700 font-bold mb-1 text-sm">Bijnaam</label>
           <input
             type="text"
             value={nickname}
             onChange={e => setNickname(e.target.value.slice(0, 20))}
-            placeholder="E.g. SpeedKing99"
+            placeholder="Bijv. SpeedKing99"
             className="w-full border-2 border-gray-200 focus:border-indigo-500 rounded-xl px-4 py-3 text-lg text-gray-900 outline-none mb-6 transition-colors"
             onKeyDown={e => e.key === 'Enter' && handleJoin()}
           />
@@ -156,14 +175,14 @@ export default function PlayerView() {
             onClick={handleJoin}
             className="w-full bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white py-4 rounded-2xl text-xl font-black transition-all transform active:scale-95"
           >
-            Join Game!
+            Meedoen!
           </button>
 
           <button
             onClick={() => navigate('/')}
             className="w-full text-gray-400 text-sm mt-3 py-2 hover:text-gray-600 transition-colors"
           >
-            ← Back to home
+            ← Terug naar home
           </button>
         </div>
       </div>
@@ -177,12 +196,12 @@ export default function PlayerView() {
     return (
       <div className="min-h-screen bg-indigo-950 flex flex-col items-center justify-center text-white p-6 gap-6">
         <div className="text-6xl animate-bounce">⏳</div>
-        <h2 className="text-3xl font-black">You're in!</h2>
+        <h2 className="text-3xl font-black">Je bent erin!</h2>
         <div className="bg-indigo-800 rounded-2xl px-8 py-4 text-center">
-          <p className="text-indigo-300 text-sm">Playing as</p>
+          <p className="text-indigo-300 text-sm">Je speelt als</p>
           <p className="text-2xl font-black mt-1">{nickname}</p>
         </div>
-        <p className="text-indigo-300 text-center">Waiting for the host to start the game...</p>
+        <p className="text-indigo-300 text-center">Wachten tot de host het spel start...</p>
         <div className="flex gap-1 mt-2">
           {[0,1,2].map(i => (
             <div key={i} className="w-2 h-2 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: `${i * 0.2}s` }} />
@@ -193,14 +212,17 @@ export default function PlayerView() {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // COUNTDOWN (game about to start)
+  // COUNTDOWN
   // ─────────────────────────────────────────────────────────────────────────
   if (gameState === 'countdown') {
     return (
-      <div className="min-h-screen bg-indigo-950 flex flex-col items-center justify-center text-white gap-4">
-        <p className="text-2xl font-semibold text-indigo-300">Get ready!</p>
+      <div
+        className={`min-h-screen ${theme.lobbyBg || 'bg-indigo-950'} flex flex-col items-center justify-center text-white gap-4`}
+        style={theme.lobbyStyle || {}}
+      >
+        <p className={`text-2xl font-semibold ${theme.textSecondary}`}>Maak je klaar!</p>
         <div className="text-8xl animate-pulse">🚀</div>
-        <p className="text-indigo-400">First question coming up...</p>
+        <p className={theme.textMuted}>Eerste vraag komt eraan...</p>
       </div>
     );
   }
@@ -210,11 +232,14 @@ export default function PlayerView() {
   // ─────────────────────────────────────────────────────────────────────────
   if (gameState === 'question' && question) {
     return (
-      <div className="min-h-screen bg-gray-900 flex flex-col select-none">
+      <div className={`min-h-screen ${qBgClass} flex flex-col select-none`} style={qBgStyle}>
         {/* Header */}
-        <div className="bg-gray-800 flex items-center justify-between px-4 py-2">
-          <div className="text-gray-400 text-sm font-semibold">
-            Q{question.index + 1}/{question.total}
+        <div
+          className={`${theme.headerBg || 'bg-gray-800'} flex items-center justify-between px-4 py-2`}
+          style={theme.headerStyle || (questionBg ? { background: 'rgba(0,0,0,0.5)' } : {})}
+        >
+          <div className="text-gray-300 text-sm font-semibold">
+            V{question.index + 1}/{question.total}
           </div>
           <Timer duration={question.timeLimit} size="small" onExpire={() => setGameState('answered')} />
           <div className="text-right">
@@ -225,7 +250,7 @@ export default function PlayerView() {
 
         {/* Question text */}
         <div className="flex-1 flex items-center justify-center px-5 py-4">
-          <p className="text-white text-2xl font-black text-center leading-snug">{question.text}</p>
+          <p className="text-white text-2xl font-black text-center leading-snug drop-shadow-lg">{question.text}</p>
         </div>
 
         {/* 4 Answer buttons */}
@@ -254,19 +279,22 @@ export default function PlayerView() {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // ANSWERED — waiting for question to end
+  // ANSWERED
   // ─────────────────────────────────────────────────────────────────────────
   if (gameState === 'answered') {
     const hasResult = answerResult && !answerResult.error;
     return (
-      <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center text-white p-8 gap-4">
+      <div
+        className={`min-h-screen ${qBgClass} flex flex-col items-center justify-center text-white p-8 gap-4`}
+        style={qBgStyle}
+      >
         {hasResult ? (
           <>
-            <div className={`text-8xl animate-pop`}>
+            <div className="text-8xl animate-pop">
               {answerResult.isCorrect ? '✅' : '❌'}
             </div>
             <h2 className={`text-4xl font-black ${answerResult.isCorrect ? 'text-emerald-400' : 'text-red-400'}`}>
-              {answerResult.isCorrect ? 'Correct!' : 'Wrong!'}
+              {answerResult.isCorrect ? 'Goed!' : 'Fout!'}
             </h2>
             {answerResult.isCorrect && (
               <p className="text-3xl font-black text-yellow-400">+{answerResult.points.toLocaleString()} pts</p>
@@ -274,53 +302,53 @@ export default function PlayerView() {
             {answerResult.streak > 1 && (
               <p className="text-xl text-orange-400 font-bold">🔥 {answerResult.streak}× streak bonus!</p>
             )}
-            <p className="text-gray-500 text-lg mt-2 font-semibold">{myScore.toLocaleString()} pts total</p>
+            <p className="text-gray-400 text-lg mt-2 font-semibold">{myScore.toLocaleString()} pts totaal</p>
           </>
         ) : (
           <>
             <div className="text-7xl">⏰</div>
-            <h2 className="text-3xl font-black text-gray-300">Time's up!</h2>
+            <h2 className="text-3xl font-black text-gray-300">Tijd voorbij!</h2>
           </>
         )}
-        <p className="text-gray-600 text-sm mt-4 animate-pulse">Waiting for results...</p>
+        <p className="text-gray-500 text-sm mt-4 animate-pulse">Wachten op resultaten...</p>
       </div>
     );
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // QUESTION END — show correct answer + player rank
+  // QUESTION END
   // ─────────────────────────────────────────────────────────────────────────
   if (gameState === 'questionEnd') {
     const me = leaderboard.find(p => p.id === socket.id);
     const medals = ['🥇', '🥈', '🥉'];
 
     return (
-      <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center text-white p-6 gap-5">
-        {/* Correct answer */}
+      <div
+        className={`min-h-screen ${qBgClass} flex flex-col items-center justify-center text-white p-6 gap-5`}
+        style={qBgStyle}
+      >
         {correctAnswer !== null && question && (
           <div className={`${ANSWERS[correctAnswer].bg} rounded-2xl px-6 py-3 text-center w-full max-w-sm`}>
-            <p className="text-xs font-semibold opacity-80 uppercase">Correct answer</p>
+            <p className="text-xs font-semibold opacity-80 uppercase">Goed antwoord</p>
             <p className={`text-xl font-black mt-0.5 ${ANSWERS[correctAnswer].textDark ? 'text-black' : 'text-white'}`}>
               {question.options[correctAnswer]}
             </p>
           </div>
         )}
 
-        {/* Rank + score */}
         {me && (
           <div className="text-center animate-pop">
             <p className="text-6xl font-black text-yellow-400">
               {medals[me.rank - 1] ?? `#${me.rank}`}
             </p>
-            <p className="text-gray-400 text-sm">Your current rank</p>
+            <p className="text-gray-400 text-sm">Je huidige positie</p>
             <p className="text-3xl font-black text-white mt-2">{me.score.toLocaleString()} pts</p>
           </div>
         )}
 
-        {/* Top 3 mini leaderboard */}
         <div className="w-full max-w-sm space-y-2">
           {leaderboard.slice(0, 3).map((entry, i) => (
-            <div key={entry.id} className={`flex items-center justify-between px-4 py-2 rounded-xl ${entry.id === socket.id ? 'bg-indigo-700' : 'bg-gray-800'}`}>
+            <div key={entry.id} className={`flex items-center justify-between px-4 py-2 rounded-xl ${entry.id === socket.id ? 'bg-indigo-700' : 'bg-gray-800/80'}`}>
               <div className="flex items-center gap-2">
                 <span className="text-lg">{medals[i] ?? `#${i+1}`}</span>
                 <span className="font-semibold text-sm">{entry.nickname}</span>
@@ -330,7 +358,7 @@ export default function PlayerView() {
           ))}
         </div>
 
-        <p className="text-gray-600 text-sm animate-pulse">Waiting for next question...</p>
+        <p className="text-gray-500 text-sm animate-pulse">Wachten op volgende vraag...</p>
       </div>
     );
   }
@@ -343,28 +371,29 @@ export default function PlayerView() {
     const medals = ['🥇', '🥈', '🥉'];
 
     return (
-      <div className="min-h-screen bg-gray-900 flex flex-col items-center text-white p-6 overflow-auto">
+      <div
+        className={`min-h-screen ${theme.gameBg || 'bg-gray-900'} flex flex-col items-center text-white p-6 overflow-auto`}
+        style={theme.gameStyle || {}}
+      >
         <h1 className="text-4xl font-black mt-6 mb-2">Game Over!</h1>
 
-        {/* My result card */}
         {me && (
-          <div className="bg-indigo-800 rounded-3xl p-6 my-6 text-center w-full max-w-xs animate-pop">
-            <p className="text-indigo-300 text-sm">You finished</p>
+          <div className={`${theme.playerBadge || 'bg-indigo-800'} rounded-3xl p-6 my-6 text-center w-full max-w-xs animate-pop`}>
+            <p className={`${theme.textSecondary || 'text-indigo-300'} text-sm`}>Je eindigde op</p>
             <p className="text-7xl font-black text-yellow-400 my-1">
               {medals[me.rank - 1] ?? `#${me.rank}`}
             </p>
             <p className="text-3xl font-black">{me.score.toLocaleString()}</p>
-            <p className="text-indigo-300 text-sm">points</p>
+            <p className={`${theme.textSecondary || 'text-indigo-300'} text-sm`}>punten</p>
           </div>
         )}
 
-        {/* Full leaderboard */}
         <div className="w-full max-w-sm space-y-2 mb-6">
           {lb.map((entry, i) => (
             <div
               key={entry.id}
               className={`flex items-center justify-between px-5 py-3 rounded-2xl font-semibold
-                ${entry.id === socket.id ? 'bg-indigo-700 ring-2 ring-yellow-400' : 'bg-gray-800'}`}
+                ${entry.id === socket.id ? 'bg-indigo-700 ring-2 ring-yellow-400' : 'bg-gray-800/80'}`}
             >
               <div className="flex items-center gap-3">
                 <span className="w-8 text-center">{medals[i] ?? <span className="text-gray-500">#{i+1}</span>}</span>
@@ -379,7 +408,7 @@ export default function PlayerView() {
           onClick={() => navigate('/')}
           className="bg-indigo-700 hover:bg-indigo-600 text-white px-10 py-3 rounded-full font-bold transition-all mb-8"
         >
-          ← Back to Home
+          ← Terug naar Home
         </button>
       </div>
     );

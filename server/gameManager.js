@@ -16,6 +16,7 @@ class GameManager {
     return {
       id: dbQuiz.id,
       title: dbQuiz.title,
+      theme: dbQuiz.theme || 'default',
       questions: dbQuiz.questions.map(q => {
         const correctIndices = q.options
           .map((o, i) => (o.isCorrect ? i : -1))
@@ -28,6 +29,7 @@ class GameManager {
           options: q.options.map(o => o.text),
           correct: q.type === 'multiple' ? correctIndices : correctIndices[0],
           timeLimit: q.timeLimit || 20,
+          background: q.background || null,
         };
       }),
     };

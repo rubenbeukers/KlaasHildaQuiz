@@ -48,7 +48,7 @@ router.get('/:id', async (req, res) => {
 // POST /api/quizzes - Create new quiz with questions
 router.post('/', async (req, res) => {
   try {
-    const { title, maxPlayers, questions } = req.body;
+    const { title, maxPlayers, theme, questions } = req.body;
     if (!title || !title.trim()) {
       return res.status(400).json({ error: 'Title is required' });
     }
@@ -61,12 +61,14 @@ router.post('/', async (req, res) => {
         userId: req.user.id,
         title: title.trim(),
         maxPlayers: maxPlayers || 10,
+        theme: theme || 'default',
         questions: {
           create: questions.map((q, qi) => ({
             text: q.text,
             type: q.type || 'single',
             timeLimit: q.timeLimit || 20,
             sortOrder: qi,
+            background: q.background || null,
             options: {
               create: q.options.map((opt, oi) => ({
                 text: opt.text,
@@ -96,7 +98,7 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     const quizId = parseInt(req.params.id);
-    const { title, maxPlayers, questions } = req.body;
+    const { title, maxPlayers, theme, questions } = req.body;
 
     // Verify ownership
     const existing = await prisma.quiz.findFirst({
@@ -120,12 +122,14 @@ router.put('/:id', async (req, res) => {
       data: {
         title: title.trim(),
         maxPlayers: maxPlayers || existing.maxPlayers,
+        theme: theme || existing.theme || 'default',
         questions: {
           create: questions.map((q, qi) => ({
             text: q.text,
             type: q.type || 'single',
             timeLimit: q.timeLimit || 20,
             sortOrder: qi,
+            background: q.background || null,
             options: {
               create: q.options.map((opt, oi) => ({
                 text: opt.text,
