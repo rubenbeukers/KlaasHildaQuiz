@@ -1,9 +1,12 @@
+require('dotenv').config();
+
 const express = require('express');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const QRCode = require('qrcode');
 const GameManager = require('./gameManager');
+const authRoutes = require('./routes/auth');
 
 const path = require('path');
 
@@ -20,6 +23,9 @@ const gameManager = new GameManager();
 
 app.use(cors());
 app.use(express.json());
+
+// Auth routes
+app.use('/api/auth', authRoutes);
 
 // Serve React build in production
 const clientBuild = path.join(__dirname, '..', 'client', 'dist');

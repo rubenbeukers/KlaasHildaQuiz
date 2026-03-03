@@ -1,0 +1,88 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id           Int           @id @default(autoincrement())
+  email        String        @unique
+  passwordHash String        @map("password_hash")
+  name         String?
+  createdAt    DateTime      @default(now()) @map("created_at")
+  quizzes      Quiz[]
+  gameSessions GameSession[]
+
+  @@map("users")
+}
+
+model Quiz {
+  id          Int           @id @default(autoincrement())
+  userId      Int           @map("user_id")
+  title       String
+  maxPlayers  Int           @default(10) @map("max_players")
+  isPaid      Boolean       @default(false) @map("is_paid")
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+  user        User          @relation(fields: [userId], references: [id])
+  questions   Question[]
+  gameSessions GameSession[]
+
+  @@map("quizzes")
+}
+
+model Question {
+  id        Int            @id @default(autoincrement())
+  quizId    Int            @map("quiz_id")
+  text      String
+  type      String         @default("single") // "single" or "multiple"
+  timeLimit Int            @default(20) @map("time_limit")
+  sortOrder Int            @map("sort_order")
+  quiz      Quiz           @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  options   AnswerOption[]
+
+  @@map("questions")
+}
+
+model AnswerOption {
+  id         Int      @id @default(autoincrement())
+  questionId Int      @map("question_id")
+  text       String
+  isCorrect  Boolean  @default(false) @map("is_correct")
+  sortOrder  Int      @map("sort_order")
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@map("answer_options")
+}
+
+model GameSession {
+  id          Int          @id @default(autoincrement())
+  quizId      Int          @map("quiz_id")
+  userId      Int          @map("user_id")
+  pin         String
+  status      String       @default("lobby")
+  playerCount Int          @default(0) @map("player_count")
+  startedAt   DateTime?    @map("started_at")
+  endedAt     DateTime?    @map("ended_at")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  quiz        Quiz         @relation(fields: [quizId], references: [id])
+  user        User         @relation(fields: [userId], references: [id])
+  results     GameResult[]
+
+  @@map("game_sessions")
+}
+
+model GameResult {
+  id            Int         @id @default(autoincrement())
+  gameSessionId Int         @map("game_session_id")
+  nickname      String
+  finalScore    Int         @default(0) @map("final_score")
+  finalRank     Int?        @map("final_rank")
+  correctCount  Int         @default(0) @map("correct_count")
+  totalQuestions Int        @default(0) @map("total_questions")
+  gameSession   GameSession @relation(fields: [gameSessionId], references: [id], onDelete: Cascade)
+
+  @@map("game_results")
+}
