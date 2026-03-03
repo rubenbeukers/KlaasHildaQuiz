@@ -58,7 +58,7 @@ export default function Register() {
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:border-indigo-500 focus:outline-none transition-colors"
+              className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-gray-900 focus:border-indigo-500 focus:outline-none transition-colors"
               placeholder="Je naam"
             />
           </div>
@@ -69,7 +69,7 @@ export default function Register() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:border-indigo-500 focus:outline-none transition-colors"
+              className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-gray-900 focus:border-indigo-500 focus:outline-none transition-colors"
               placeholder="je@email.nl"
               required
             />
@@ -81,7 +81,7 @@ export default function Register() {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:border-indigo-500 focus:outline-none transition-colors"
+              className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-gray-900 focus:border-indigo-500 focus:outline-none transition-colors"
               placeholder="Minimaal 6 tekens"
               required
             />
@@ -93,7 +93,7 @@ export default function Register() {
               type="password"
               value={password2}
               onChange={(e) => setPassword2(e.target.value)}
-              className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:border-indigo-500 focus:outline-none transition-colors"
+              className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-gray-900 focus:border-indigo-500 focus:outline-none transition-colors"
               placeholder="Herhaal wachtwoord"
               required
             />
