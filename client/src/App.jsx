@@ -6,6 +6,7 @@ import PlayerView from './pages/PlayerView.jsx';
 import Login from './pages/Login.jsx';
 import Register from './pages/Register.jsx';
 import Dashboard from './pages/Dashboard.jsx';
+import QuizBuilder from './pages/QuizBuilder.jsx';
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -29,6 +30,8 @@ export default function App() {
           <Route path="/login"       element={<Login />} />
           <Route path="/register"    element={<Register />} />
           <Route path="/dashboard"   element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+          <Route path="/quiz/new"    element={<ProtectedRoute><QuizBuilder /></ProtectedRoute>} />
+          <Route path="/quiz/:id/edit" element={<ProtectedRoute><QuizBuilder /></ProtectedRoute>} />
           <Route path="/host"        element={<HostView />} />
           <Route path="/host/:pin"   element={<HostView />} />
           <Route path="/join"        element={<PlayerView />} />

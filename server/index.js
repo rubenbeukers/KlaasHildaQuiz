@@ -7,6 +7,7 @@ const cors = require('cors');
 const QRCode = require('qrcode');
 const GameManager = require('./gameManager');
 const authRoutes = require('./routes/auth');
+const quizRoutes = require('./routes/quizzes');
 
 const path = require('path');
 
@@ -26,6 +27,7 @@ app.use(express.json());
 
 // Auth routes
 app.use('/api/auth', authRoutes);
+app.use('/api/quizzes', quizRoutes);
 
 // Serve React build in production
 const clientBuild = path.join(__dirname, '..', 'client', 'dist');
