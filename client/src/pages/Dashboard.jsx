@@ -41,6 +41,30 @@ export default function Dashboard() {
     }
   };
 
+  const handlePayment = async (quizId) => {
+    try {
+      const res = await fetch(`${SERVER_URL}/api/payments/create-checkout`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ quizId }),
+      });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else if (data.free) {
+        // Free tier - refresh quizzes
+        fetchQuizzes();
+      } else {
+        alert(data.error || 'Betalingen zijn nog niet geconfigureerd');
+      }
+    } catch {
+      alert('Betaling niet beschikbaar');
+    }
+  };
+
   const handleLogout = () => {
     logout();
     navigate('/');
@@ -114,7 +138,15 @@ export default function Dashboard() {
                 className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex items-center justify-between hover:shadow-md transition-shadow"
               >
                 <div className="flex-1">
-                  <h3 className="text-lg font-bold text-gray-900">{quiz.title}</h3>
+                  <h3 className="text-lg font-bold text-gray-900">
+                    {quiz.title}
+                    {quiz.maxPlayers > 10 && quiz.isPaid && (
+                      <span className="ml-2 inline-block bg-emerald-100 text-emerald-700 text-xs font-semibold px-2 py-0.5 rounded-full align-middle">Betaald</span>
+                    )}
+                    {quiz.maxPlayers > 10 && !quiz.isPaid && (
+                      <span className="ml-2 inline-block bg-amber-100 text-amber-700 text-xs font-semibold px-2 py-0.5 rounded-full align-middle">Niet betaald</span>
+                    )}
+                  </h3>
                   <div className="flex gap-4 mt-1 text-sm text-gray-500">
                     <span>{quiz._count.questions} vragen</span>
                     <span>Max {quiz.maxPlayers} spelers</span>
@@ -130,12 +162,21 @@ export default function Dashboard() {
                   >
                     Bewerken
                   </button>
-                  <button
-                    onClick={() => navigate(`/host?quizId=${quiz.id}`)}
-                    className="bg-emerald-500 hover:bg-emerald-400 text-white font-semibold px-4 py-2 rounded-xl text-sm transition-colors"
-                  >
-                    Starten
-                  </button>
+                  {quiz.maxPlayers > 10 && !quiz.isPaid ? (
+                    <button
+                      onClick={() => handlePayment(quiz.id)}
+                      className="bg-amber-500 hover:bg-amber-400 text-white font-semibold px-4 py-2 rounded-xl text-sm transition-colors"
+                    >
+                      Betalen
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => navigate(`/host?quizId=${quiz.id}`)}
+                      className="bg-emerald-500 hover:bg-emerald-400 text-white font-semibold px-4 py-2 rounded-xl text-sm transition-colors"
+                    >
+                      Starten
+                    </button>
+                  )}
                   <button
                     onClick={() => handleDelete(quiz.id)}
                     className="bg-red-50 hover:bg-red-100 text-red-600 font-semibold px-4 py-2 rounded-xl text-sm transition-colors"

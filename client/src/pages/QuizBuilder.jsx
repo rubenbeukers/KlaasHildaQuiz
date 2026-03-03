@@ -159,6 +159,31 @@ export default function QuizBuilder() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Opslaan mislukt');
+
+      const savedQuizId = data.quiz?.id;
+
+      // If maxPlayers > 10 and quiz not yet paid, redirect to payment
+      if (maxPlayers > 10 && savedQuizId) {
+        try {
+          const payRes = await fetch(`${SERVER_URL}/api/payments/create-checkout`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ quizId: savedQuizId }),
+          });
+          const payData = await payRes.json();
+          if (payData.url) {
+            window.location.href = payData.url;
+            return;
+          }
+          // If free or payment not configured, go to dashboard
+        } catch {
+          // Payment not available, continue to dashboard
+        }
+      }
+
       navigate('/dashboard');
     } catch (err) {
       setError(err.message);

@@ -9,6 +9,7 @@ const GameManager = require('./gameManager');
 const prisma = require('./db');
 const authRoutes = require('./routes/auth');
 const quizRoutes = require('./routes/quizzes');
+const paymentRoutes = require('./routes/payments');
 
 const path = require('path');
 
@@ -24,11 +25,15 @@ const io = new Server(httpServer, {
 const gameManager = new GameManager();
 
 app.use(cors());
+
+// Stripe webhook needs raw body - mount before express.json()
+app.use('/api/payments/webhook', express.raw({ type: 'application/json' }));
 app.use(express.json());
 
-// Auth routes
+// API routes
 app.use('/api/auth', authRoutes);
 app.use('/api/quizzes', quizRoutes);
+app.use('/api/payments', paymentRoutes);
 
 // Serve React build in production
 const clientBuild = path.join(__dirname, '..', 'client', 'dist');
@@ -78,6 +83,11 @@ io.on('connection', (socket) => {
 
       if (!dbQuiz) return callback({ error: 'Quiz not found' });
       if (dbQuiz.questions.length === 0) return callback({ error: 'Quiz has no questions' });
+
+      // Payment enforcement: quizzes with >10 players must be paid
+      if (dbQuiz.maxPlayers > 10 && !dbQuiz.isPaid) {
+        return callback({ error: 'Deze quiz vereist betaling voor meer dan 10 spelers. Ga naar de quiz editor om te betalen.' });
+      }
 
       const game = gameManager.createGame(socket.id, dbQuiz);
       socket.join(game.pin);
