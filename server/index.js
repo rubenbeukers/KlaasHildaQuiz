@@ -1,4 +1,4 @@
-require('dotenv').config();
+require('dotenv').config(); // Gemini API key configured
 
 const express = require('express');
 const { createServer } = require('http');

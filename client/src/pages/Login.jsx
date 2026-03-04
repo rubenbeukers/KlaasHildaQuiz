@@ -73,6 +73,12 @@ export default function Login() {
           </button>
         </form>
 
+        <div className="text-right mt-2">
+          <Link to="/forgot-password" className="text-indigo-600 text-sm hover:underline">
+            Wachtwoord vergeten?
+          </Link>
+        </div>
+
         <p className="text-center text-gray-500 text-sm mt-6">
           Nog geen account?{' '}
           <Link to="/register" className="text-indigo-600 font-semibold hover:underline">

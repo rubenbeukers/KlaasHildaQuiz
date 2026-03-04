@@ -7,16 +7,29 @@ datasource db {
 }
 
 model User {
-  id           Int           @id @default(autoincrement())
-  email        String        @unique
-  passwordHash String        @map("password_hash")
-  name         String?
-  isAdmin      Boolean       @default(false) @map("is_admin")
-  createdAt    DateTime      @default(now()) @map("created_at")
-  quizzes      Quiz[]
-  gameSessions GameSession[]
+  id             Int              @id @default(autoincrement())
+  email          String           @unique
+  passwordHash   String           @map("password_hash")
+  name           String?
+  isAdmin        Boolean          @default(false) @map("is_admin")
+  createdAt      DateTime         @default(now()) @map("created_at")
+  quizzes        Quiz[]
+  gameSessions   GameSession[]
+  passwordResets PasswordReset[]
 
   @@map("users")
+}
+
+model PasswordReset {
+  id        Int       @id @default(autoincrement())
+  userId    Int       @map("user_id")
+  tokenHash String    @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("password_resets")
 }
 
 model Quiz {

@@ -5,6 +5,8 @@ import HostView from './pages/HostView.jsx';
 import PlayerView from './pages/PlayerView.jsx';
 import Login from './pages/Login.jsx';
 import Register from './pages/Register.jsx';
+import ForgotPassword from './pages/ForgotPassword.jsx';
+import ResetPassword from './pages/ResetPassword.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import QuizBuilder from './pages/QuizBuilder.jsx';
 import QuizHistory from './pages/QuizHistory.jsx';
@@ -30,6 +32,8 @@ export default function App() {
           <Route path="/"            element={<Home />} />
           <Route path="/login"       element={<Login />} />
           <Route path="/register"    element={<Register />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password"  element={<ResetPassword />} />
           <Route path="/dashboard"   element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/quiz/new"    element={<ProtectedRoute><QuizBuilder /></ProtectedRoute>} />
           <Route path="/quiz/:id/edit" element={<ProtectedRoute><QuizBuilder /></ProtectedRoute>} />

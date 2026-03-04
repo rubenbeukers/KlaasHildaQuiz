@@ -1,7 +1,9 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const prisma = require('../db');
 const { generateToken, authenticateToken } = require('../middleware/auth');
+const { sendPasswordResetEmail } = require('../utils/mailer');
 
 const router = express.Router();
 
@@ -90,6 +92,120 @@ router.get('/me', authenticateToken, async (req, res) => {
     res.json({ user });
   } catch (err) {
     console.error('Me error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// POST /api/auth/forgot-password
+router.post('/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ error: 'Email is verplicht' });
+    }
+
+    // Always return success to prevent email enumeration
+    const successMsg = 'Als dit emailadres bij ons bekend is, ontvang je binnen enkele minuten een email met een resetlink.';
+
+    const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+    if (!user) {
+      return res.json({ message: successMsg });
+    }
+
+    // Rate limit: max 3 active (unused + not expired) tokens per user
+    const activeTokens = await prisma.passwordReset.count({
+      where: {
+        userId: user.id,
+        usedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+    });
+
+    if (activeTokens >= 3) {
+      return res.json({ message: successMsg });
+    }
+
+    // Generate secure random token
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+
+    // Store hashed token in DB (expires in 1 hour)
+    await prisma.passwordReset.create({
+      data: {
+        userId: user.id,
+        tokenHash,
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000), // 1 hour
+      },
+    });
+
+    // Send email async (fire-and-forget)
+    sendPasswordResetEmail(user.email, rawToken).catch(err => {
+      console.error('Failed to send password reset email:', err);
+    });
+
+    res.json({ message: successMsg });
+  } catch (err) {
+    console.error('Forgot password error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// POST /api/auth/reset-password
+router.post('/reset-password', async (req, res) => {
+  try {
+    const { token, password } = req.body;
+
+    if (!token || !password) {
+      return res.status(400).json({ error: 'Token en wachtwoord zijn verplicht' });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'Wachtwoord moet minimaal 6 tekens bevatten' });
+    }
+
+    // Hash the token and look it up
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+
+    const resetRecord = await prisma.passwordReset.findFirst({
+      where: {
+        tokenHash,
+        usedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+      include: { user: true },
+    });
+
+    if (!resetRecord) {
+      return res.status(400).json({ error: 'Ongeldige of verlopen resetlink. Vraag een nieuwe link aan.' });
+    }
+
+    // Update password
+    const passwordHash = await bcrypt.hash(password, 10);
+    await prisma.user.update({
+      where: { id: resetRecord.userId },
+      data: { passwordHash },
+    });
+
+    // Mark this token as used
+    await prisma.passwordReset.update({
+      where: { id: resetRecord.id },
+      data: { usedAt: new Date() },
+    });
+
+    // Invalidate all other active tokens for this user
+    await prisma.passwordReset.updateMany({
+      where: {
+        userId: resetRecord.userId,
+        id: { not: resetRecord.id },
+        usedAt: null,
+      },
+      data: { usedAt: new Date() },
+    });
+
+    res.json({ message: 'Wachtwoord succesvol gewijzigd! Je kunt nu inloggen.' });
+  } catch (err) {
+    console.error('Reset password error:', err);
     res.status(500).json({ error: 'Server error' });
   }
 });

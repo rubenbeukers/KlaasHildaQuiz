@@ -250,7 +250,9 @@ export default function PlayerView() {
 
         {/* Question text */}
         <div className="flex-1 flex items-center justify-center px-5 py-4">
-          <p className="text-white text-2xl font-black text-center leading-snug drop-shadow-lg">{question.text}</p>
+          <div className="bg-black/40 backdrop-blur-sm rounded-2xl px-6 py-4 max-w-lg w-full">
+            <p className="text-white text-2xl font-black text-center leading-snug drop-shadow-lg">{question.text}</p>
+          </div>
         </div>
 
         {/* 4 Answer buttons */}
