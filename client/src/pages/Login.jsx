@@ -28,9 +28,9 @@ export default function Login() {
     <div className="min-h-screen bg-indigo-950 flex items-center justify-center p-4">
       <div className="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-md">
         <div className="text-center mb-6">
-          <span className="text-4xl">⚡</span>
+          <span className="text-4xl">🔥</span>
           <h1 className="text-2xl font-black text-gray-900 mt-2">Login</h1>
-          <p className="text-gray-500 text-sm mt-1">Log in op je QuizBlast account</p>
+          <p className="text-gray-500 text-sm mt-1">Log in op je Quizonaire account</p>
         </div>
 
         {error && (

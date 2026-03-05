@@ -24,6 +24,7 @@ const io = new Server(httpServer, {
 });
 
 const gameManager = new GameManager();
+const hostReconnectTimers = new Map();
 
 app.use(cors());
 
@@ -189,6 +190,74 @@ io.on('connection', (socket) => {
     }
   });
 
+  // ── HOST: rejoin existing game ─────────────────────────────────────────────
+  socket.on('host:rejoin', ({ gamePin }, callback) => {
+    const game = gameManager.getGame(gamePin);
+    if (!game) return callback?.({ error: 'Game niet gevonden' });
+
+    const timer = hostReconnectTimers.get(gamePin);
+    if (timer) { clearTimeout(timer); hostReconnectTimers.delete(gamePin); }
+
+    game.hostSocketId = socket.id;
+    socket.join(gamePin);
+    socket.data.role = 'host';
+    socket.data.gamePin = gamePin;
+
+    io.to(gamePin).emit('host:reconnected');
+    console.log(`[HOST] Rejoined: ${gamePin}`);
+    callback?.({
+      success: true,
+      status: game.status,
+      currentQuestion: game.currentQuestion,
+      quizTitle: game.quiz?.title || '',
+      theme: game.quiz?.theme || 'default',
+      totalQuestions: game.quiz?.questions?.length || 0,
+      players: Array.from(game.players.values()).map(p => ({ id: p.id, nickname: p.nickname, score: p.score })),
+    });
+  });
+
+  // ── PLAYER: rejoin after reconnect ─────────────────────────────────────────
+  socket.on('player:rejoin', ({ gamePin, nickname }, callback) => {
+    const game = gameManager.getGame(gamePin);
+    if (!game) return callback?.({ error: 'Game niet gevonden' });
+    if (game.status !== 'active') return callback?.({ error: 'Spel niet actief' });
+
+    const found = gameManager.getPlayerByNickname(gamePin, nickname);
+    if (!found) return callback?.({ error: 'Speler niet gevonden' });
+
+    gameManager.updatePlayerSocketId(gamePin, found.socketId, socket.id);
+    socket.join(gamePin);
+    socket.data.role = 'player';
+    socket.data.gamePin = gamePin;
+    socket.data.nickname = nickname;
+
+    const player = game.players.get(socket.id);
+    console.log(`[REJOIN] ${nickname} rejoined ${gamePin}`);
+    callback?.({ success: true, score: player?.score || 0, streak: player?.streak || 0 });
+  });
+
+  // ── HOST: end game early ───────────────────────────────────────────────────
+  socket.on('game:end_early', ({ gamePin }) => {
+    const game = gameManager.getGame(gamePin);
+    if (!game || game.hostSocketId !== socket.id) return;
+    console.log(`[GAME] Ended early: ${gamePin}`);
+    endGame(gamePin);
+  });
+
+  // ── HOST: kick a player ────────────────────────────────────────────────────
+  socket.on('player:kick', ({ gamePin, playerId }) => {
+    const game = gameManager.getGame(gamePin);
+    if (!game || game.hostSocketId !== socket.id) return;
+    const player = game.players.get(playerId);
+    if (!player) return;
+    const nickname = player.nickname;
+    gameManager.removePlayer(gamePin, playerId);
+    io.to(playerId).emit('player:kicked', { message: 'Je bent verwijderd door de host.' });
+    const players = gameManager.getPlayers(gamePin);
+    io.to(game.hostSocketId).emit('player:joined', { players });
+    console.log(`[KICK] ${nickname} from ${gamePin}`);
+  });
+
   // ── Disconnect handling ──────────────────────────────────────────────────
   socket.on('disconnect', () => {
     console.log(`[-] Disconnected: ${socket.id}`);
@@ -196,14 +265,27 @@ io.on('connection', (socket) => {
     if (!gamePin) return;
 
     if (role === 'host') {
-      io.to(gamePin).emit('host:disconnected', { message: 'The host disconnected. Game ended.' });
-      gameManager.deleteGame(gamePin);
-    } else if (role === 'player') {
-      gameManager.removePlayer(gamePin, socket.id);
       const game = gameManager.getGame(gamePin);
-      if (game && game.status === 'lobby') {
-        const players = gameManager.getPlayers(gamePin);
-        io.to(game.hostSocketId).emit('player:joined', { players });
+      if (!game) return;
+      io.to(gamePin).emit('host:reconnecting', { seconds: 10 });
+      const timer = setTimeout(() => {
+        hostReconnectTimers.delete(gamePin);
+        io.to(gamePin).emit('host:disconnected', { message: 'De host heeft de verbinding verbroken. Het spel is beëindigd.' });
+        gameManager.deleteGame(gamePin);
+        console.log(`[GAME] Deleted after host timeout: ${gamePin}`);
+      }, 10000);
+      hostReconnectTimers.set(gamePin, timer);
+      console.log(`[-HOST] Disconnected, 10s grace: ${gamePin}`);
+    } else if (role === 'player') {
+      const game = gameManager.getGame(gamePin);
+      if (game && game.status === 'active') {
+        console.log(`[-PLAYER] Disconnected mid-game: ${socket.data.nickname}`);
+      } else {
+        gameManager.removePlayer(gamePin, socket.id);
+        if (game && game.status === 'lobby') {
+          const players = gameManager.getPlayers(gamePin);
+          io.to(game.hostSocketId).emit('player:joined', { players });
+        }
       }
     }
   });
@@ -222,6 +304,7 @@ function showQuestion(gamePin, questionIndex) {
     index: questionIndex,
     total: game.quiz.questions.length,
     text: question.text,
+    type: question.type || 'single',
     options: question.options,
     timeLimit: question.timeLimit,
     background: question.background || null,

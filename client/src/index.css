@@ -21,6 +21,11 @@ body {
   overscroll-behavior: none;
 }
 
+/* Ensure form inputs always have dark text (body has color: white) */
+input, textarea, select {
+  color: #111827;
+}
+
 /* Prevent double-tap zoom on mobile */
 button, a {
   touch-action: manipulation;

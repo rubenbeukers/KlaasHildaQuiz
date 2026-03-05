@@ -58,8 +58,8 @@ export default function QuizHistory() {
       <header className="bg-white border-b border-gray-200">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate('/dashboard')}>
-            <span className="text-2xl">⚡</span>
-            <h1 className="text-xl font-black text-gray-900">QuizBlast</h1>
+            <span className="text-2xl">🔥</span>
+            <h1 className="text-xl font-black text-gray-900">Quizonaire</h1>
           </div>
           <button
             onClick={() => navigate('/dashboard')}

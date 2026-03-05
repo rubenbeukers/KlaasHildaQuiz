@@ -9,8 +9,8 @@ export default function Home() {
     <div className="min-h-screen bg-indigo-950 flex flex-col items-center justify-center gap-8 p-6">
       {/* Logo */}
       <div className="text-center animate-pop">
-        <div className="text-7xl mb-3">⚡</div>
-        <h1 className="text-6xl font-black text-white tracking-tight">QuizBlast</h1>
+        <div className="text-7xl mb-3">🔥</div>
+        <h1 className="text-6xl font-black text-white tracking-tight">Quizonaire</h1>
         <p className="text-indigo-300 text-lg mt-2">Real-time multiplayer quiz</p>
       </div>
 

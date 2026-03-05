@@ -90,6 +90,34 @@ class GameManager {
     game.players.delete(socketId);
   }
 
+  getPlayerByNickname(pin, nickname) {
+    const game = this.games.get(pin);
+    if (!game) return null;
+    for (const [socketId, player] of game.players.entries()) {
+      if (player.nickname.toLowerCase() === nickname.toLowerCase()) {
+        return { socketId, player };
+      }
+    }
+    return null;
+  }
+
+  updatePlayerSocketId(pin, oldSocketId, newSocketId) {
+    const game = this.games.get(pin);
+    if (!game) return false;
+    const player = game.players.get(oldSocketId);
+    if (!player) return false;
+    player.id = newSocketId;
+    game.players.delete(oldSocketId);
+    game.players.set(newSocketId, player);
+    const answers = game.answers.get(game.currentQuestion);
+    if (answers && answers.has(oldSocketId)) {
+      const ans = answers.get(oldSocketId);
+      answers.delete(oldSocketId);
+      answers.set(newSocketId, ans);
+    }
+    return true;
+  }
+
   getPlayers(pin) {
     const game = this.games.get(pin);
     if (!game) return [];

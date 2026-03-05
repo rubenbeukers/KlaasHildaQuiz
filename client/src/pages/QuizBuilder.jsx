@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { THEME_LIST, QUESTION_BACKGROUNDS } from '../themes';
+import { THEME_LIST } from '../themes';
 import {
   ArrowLeft,
   Save,
@@ -14,13 +14,13 @@ import {
   Sparkles,
   Settings,
   X,
-  Image,
   Users,
   Palette,
   Hash,
   Type,
   Timer,
   Star,
+  Tag,
 } from 'lucide-react';
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || (import.meta.env.PROD ? '' : 'http://localhost:4000');
@@ -31,15 +31,14 @@ const EMPTY_QUESTION = () => ({
   type: 'single',
   timeLimit: 20,
   points: 'standard',
-  background: null,
   options: [EMPTY_OPTION(), EMPTY_OPTION(), EMPTY_OPTION(), EMPTY_OPTION()],
 });
 
 const MAX_PLAYERS_OPTIONS = [
-  { value: 10, label: '10 spelers', price: 'Gratis' },
-  { value: 30, label: '30 spelers', price: '€5' },
-  { value: 50, label: '50 spelers', price: '€10' },
-  { value: 100, label: '100 spelers', price: '€15' },
+  { value: 10, label: '0–10 spelers', price: 'Gratis' },
+  { value: 30, label: '10–30 spelers', price: '€5' },
+  { value: 50, label: '30–50 spelers', price: '€10' },
+  { value: 100, label: '50–100 spelers', price: '€15' },
   { value: 200, label: '100+ spelers', price: '€20' },
 ];
 
@@ -72,6 +71,11 @@ export default function QuizBuilder() {
   const [aiGenerating, setAiGenerating] = useState(false);
   const [aiError, setAiError] = useState('');
 
+  // Discount code state
+  const [discountCode, setDiscountCode] = useState('');
+  const [discountValid, setDiscountValid] = useState(null); // null | { discountPct, code }
+  const [discountError, setDiscountError] = useState('');
+
   // Mobile sidebar
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -95,7 +99,6 @@ export default function QuizBuilder() {
               type: q.type,
               timeLimit: q.timeLimit,
               points: q.points || 'standard',
-              background: q.background || null,
               options: q.options.map(o => ({ text: o.text, isCorrect: o.isCorrect })),
             }))
           );
@@ -208,15 +211,21 @@ export default function QuizBuilder() {
               'Content-Type': 'application/json',
               Authorization: `Bearer ${token}`,
             },
-            body: JSON.stringify({ quizId: savedQuizId }),
+            body: JSON.stringify({ quizId: savedQuizId, discountCode: discountValid?.code || '' }),
           });
           const payData = await payRes.json();
-          if (payData.url) {
+          if (payData.free) {
+            // Admin, free tier, or 100% discount — already marked paid
+          } else if (payData.url) {
             window.location.href = payData.url;
+            return;
+          } else if (payData.error) {
+            setError(payData.error);
+            setSaving(false);
             return;
           }
         } catch {
-          // Payment not available
+          setError('Betalingsservice niet beschikbaar. Je quiz is opgeslagen maar betaling moet later alsnog.');
         }
       }
 
@@ -261,6 +270,27 @@ export default function QuizBuilder() {
       setAiError(err.message);
     } finally {
       setAiGenerating(false);
+    }
+  };
+
+  const handleValidateDiscount = async () => {
+    if (!discountCode.trim()) return;
+    setDiscountError('');
+    setDiscountValid(null);
+    try {
+      const res = await fetch(`${SERVER_URL}/api/payments/validate-discount`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ code: discountCode.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setDiscountError(data.error || 'Ongeldige code');
+      } else {
+        setDiscountValid({ discountPct: data.discountPct, code: data.code });
+      }
+    } catch {
+      setDiscountError('Kon code niet valideren');
     }
   };
 
@@ -388,6 +418,10 @@ export default function QuizBuilder() {
                   aiNumQuestions={aiNumQuestions} setAiNumQuestions={setAiNumQuestions}
                   aiGenerating={aiGenerating} aiError={aiError}
                   handleAiGenerate={handleAiGenerate}
+                  discountCode={discountCode} setDiscountCode={setDiscountCode}
+                  discountValid={discountValid} discountError={discountError}
+                  handleValidateDiscount={handleValidateDiscount}
+                  maxPlayersValue={maxPlayers}
                 />
               </div>
             </div>
@@ -417,6 +451,17 @@ export default function QuizBuilder() {
 
             {/* CENTER — Question Editor (hero) */}
             <section className="min-w-0">
+              {/* Mobile title — only visible on small screens */}
+              <div className="lg:hidden mb-4">
+                <input
+                  type="text"
+                  value={title}
+                  onChange={e => setTitle(e.target.value)}
+                  className="w-full text-2xl font-black text-slate-800 placeholder:text-slate-300 border-none outline-none bg-transparent"
+                  placeholder="Quiz Titel..."
+                />
+              </div>
+
               <div className="bg-white rounded-2xl border border-slate-200 p-5 sm:p-7">
                 {/* Question header */}
                 <div className="flex items-center justify-between mb-5">
@@ -601,37 +646,6 @@ export default function QuizBuilder() {
                   </div>
                 </div>
 
-                {/* Background picker */}
-                <div className="mb-2">
-                  <div className="flex items-center gap-1.5 mb-2.5">
-                    <Image size={12} className="text-slate-400" />
-                    <label className="text-xs font-semibold text-slate-400 uppercase tracking-widest">Achtergrond</label>
-                  </div>
-                  <div className="flex flex-wrap gap-2 mb-2">
-                    {QUESTION_BACKGROUNDS.map(bg => (
-                      <button
-                        key={bg.key}
-                        onClick={() => updateQuestion(activeQ, { background: bg.css })}
-                        className={`w-12 h-9 rounded-lg transition-all flex items-center justify-center ${
-                          (q.background || null) === bg.css
-                            ? 'ring-2 ring-violet-500 ring-offset-2 scale-110'
-                            : 'hover:scale-105 ring-1 ring-slate-200'
-                        }`}
-                        style={{ background: bg.preview }}
-                        title={bg.label}
-                      >
-                        {bg.key === 'none' && <X size={12} className="text-slate-400" />}
-                      </button>
-                    ))}
-                  </div>
-                  <input
-                    type="text"
-                    value={q.background && !QUESTION_BACKGROUNDS.some(bg => bg.css === q.background) ? q.background : ''}
-                    onChange={e => updateQuestion(activeQ, { background: e.target.value || null })}
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-700 focus:border-violet-400 focus:outline-none placeholder:text-slate-300 bg-white"
-                    placeholder="Of plak een afbeelding-URL (bijv. https://...jpg)"
-                  />
-                </div>
               </div>
 
               {/* AI Generate section */}
@@ -757,12 +771,6 @@ export default function QuizBuilder() {
                                 {hasCorrect && (
                                   <span className="text-[10px] text-emerald-500"><Check size={10} /></span>
                                 )}
-                                {qi.background && (
-                                  <span
-                                    className="w-3 h-3 rounded-full ring-1 ring-slate-200"
-                                    style={{ background: qi.background.startsWith('http') ? '#8b5cf6' : qi.background }}
-                                  />
-                                )}
                               </div>
                             </div>
 
@@ -852,6 +860,10 @@ function SettingsPanel({
   aiNumQuestions, setAiNumQuestions,
   aiGenerating, aiError,
   handleAiGenerate,
+  discountCode, setDiscountCode,
+  discountValid, discountError,
+  handleValidateDiscount,
+  maxPlayersValue,
 }) {
   return (
     <div className="space-y-5">
@@ -897,6 +909,45 @@ function SettingsPanel({
           ))}
         </div>
       </div>
+
+      {/* Discount Code — only show for paid tiers */}
+      {!isAdmin && maxPlayersValue > 10 && (
+        <>
+          <div className="h-px bg-slate-100" />
+          <div>
+            <div className="flex items-center gap-1.5 mb-2">
+              <Tag size={12} className="text-slate-400" />
+              <label className="text-xs font-semibold text-slate-400 uppercase tracking-widest">Kortingscode</label>
+            </div>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={discountCode}
+                onChange={e => setDiscountCode(e.target.value.toUpperCase())}
+                className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 font-medium focus:border-violet-400 focus:outline-none bg-white placeholder:text-slate-300 uppercase"
+                placeholder="CODE"
+                onKeyDown={e => { if (e.key === 'Enter') handleValidateDiscount(); }}
+              />
+              <button
+                onClick={handleValidateDiscount}
+                disabled={!discountCode.trim()}
+                className="px-3 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:bg-slate-200 disabled:text-slate-400 text-white text-xs font-semibold transition-colors"
+              >
+                Toepassen
+              </button>
+            </div>
+            {discountValid && (
+              <div className="mt-2 flex items-center gap-1.5 text-emerald-600 text-xs font-semibold">
+                <Check size={14} />
+                <span>{discountValid.discountPct}% korting toegepast!</span>
+              </div>
+            )}
+            {discountError && (
+              <div className="mt-2 text-red-500 text-xs">{discountError}</div>
+            )}
+          </div>
+        </>
+      )}
 
       <div className="h-px bg-slate-100" />
 

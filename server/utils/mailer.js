@@ -27,7 +27,7 @@ async function sendPasswordResetEmail(email, token) {
               <tr>
                 <td align="center" style="padding-bottom:30px;">
                   <span style="font-size:36px;">&#9889;</span>
-                  <h1 style="color:#ffffff;font-size:24px;font-weight:900;margin:8px 0 0;">QuizBlast</h1>
+                  <h1 style="color:#ffffff;font-size:24px;font-weight:900;margin:8px 0 0;">Quizonaire</h1>
                 </td>
               </tr>
               <!-- Card -->
@@ -59,7 +59,7 @@ async function sendPasswordResetEmail(email, token) {
               <!-- Footer -->
               <tr>
                 <td align="center" style="padding-top:24px;">
-                  <p style="color:#6366f1;font-size:12px;margin:0;">QuizBlast &mdash; De leukste quiz-app!</p>
+                  <p style="color:#6366f1;font-size:12px;margin:0;">Quizonaire &mdash; De leukste quiz-app!</p>
                 </td>
               </tr>
             </table>
@@ -71,9 +71,9 @@ async function sendPasswordResetEmail(email, token) {
   `;
 
   await transporter.sendMail({
-    from: `"QuizBlast" <${process.env.GMAIL_USER}>`,
+    from: `"Quizonaire" <${process.env.GMAIL_USER}>`,
     to: email,
-    subject: 'Wachtwoord resetten - QuizBlast',
+    subject: 'Wachtwoord resetten - Quizonaire',
     html,
   });
 }

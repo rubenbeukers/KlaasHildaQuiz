@@ -10,6 +10,7 @@ import ResetPassword from './pages/ResetPassword.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import QuizBuilder from './pages/QuizBuilder.jsx';
 import QuizHistory from './pages/QuizHistory.jsx';
+import ErrorBoundary from './components/ErrorBoundary.jsx';
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -38,10 +39,10 @@ export default function App() {
           <Route path="/quiz/new"    element={<ProtectedRoute><QuizBuilder /></ProtectedRoute>} />
           <Route path="/quiz/:id/edit" element={<ProtectedRoute><QuizBuilder /></ProtectedRoute>} />
           <Route path="/history"     element={<ProtectedRoute><QuizHistory /></ProtectedRoute>} />
-          <Route path="/host"        element={<HostView />} />
-          <Route path="/host/:pin"   element={<HostView />} />
-          <Route path="/join"        element={<PlayerView />} />
-          <Route path="/play/:pin"   element={<PlayerView />} />
+          <Route path="/host"        element={<ErrorBoundary><HostView /></ErrorBoundary>} />
+          <Route path="/host/:pin"   element={<ErrorBoundary><HostView /></ErrorBoundary>} />
+          <Route path="/join"        element={<ErrorBoundary><PlayerView /></ErrorBoundary>} />
+          <Route path="/play/:pin"   element={<ErrorBoundary><PlayerView /></ErrorBoundary>} />
           <Route path="*"            element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

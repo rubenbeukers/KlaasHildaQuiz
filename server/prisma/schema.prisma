@@ -90,6 +90,19 @@ model GameSession {
   @@map("game_sessions")
 }
 
+model DiscountCode {
+  id          Int       @id @default(autoincrement())
+  code        String    @unique
+  discountPct Int       @map("discount_pct") // 0–100
+  maxUses     Int?      @map("max_uses")
+  usedCount   Int       @default(0) @map("used_count")
+  active      Boolean   @default(true)
+  expiresAt   DateTime? @map("expires_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@map("discount_codes")
+}
+
 model GameResult {
   id            Int         @id @default(autoincrement())
   gameSessionId Int         @map("game_session_id")

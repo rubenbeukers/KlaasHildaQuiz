@@ -4,6 +4,13 @@ const { authenticateToken } = require('../middleware/auth');
 
 const router = express.Router();
 
+// Startup check
+if (process.env.GEMINI_API_KEY) {
+  console.log('[AI] Gemini API key configured ✓');
+} else {
+  console.warn('[AI] ⚠ GEMINI_API_KEY not set — AI generation disabled');
+}
+
 router.use(authenticateToken);
 
 // POST /api/quizzes/generate - Generate quiz questions with AI
@@ -130,7 +137,19 @@ Antwoord ALLEEN met geldig JSON in exact dit formaat, geen markdown, geen uitleg
 
     if (err.message?.includes('429') || err.message?.includes('RESOURCE_EXHAUSTED')) {
       return res.status(429).json({
-        error: 'AI limiet bereikt. Wacht even en probeer het opnieuw.',
+        error: 'AI limiet bereikt. Wacht even en probeer het opnieuw, of probeer het later nog eens.',
+      });
+    }
+
+    if (err.message?.includes('401') || err.message?.includes('403') || err.message?.includes('API_KEY_INVALID')) {
+      return res.status(401).json({
+        error: 'AI API-sleutel is ongeldig of verlopen. Neem contact op met de beheerder.',
+      });
+    }
+
+    if (err.message?.includes('SAFETY') || err.message?.includes('blocked')) {
+      return res.status(400).json({
+        error: 'AI kon geen vragen genereren over dit onderwerp. Probeer een ander onderwerp.',
       });
     }
 

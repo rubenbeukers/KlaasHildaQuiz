@@ -4,31 +4,25 @@ import socket from '../socket.js';
 import Timer from '../components/Timer.jsx';
 import Leaderboard from '../components/Leaderboard.jsx';
 import { getTheme } from '../themes.js';
+import { Zap, Droplets, Star, Leaf } from 'lucide-react';
 
 const ANSWERS = [
-  { bg: 'bg-red-500',    icon: '▲', label: 'A' },
-  { bg: 'bg-blue-500',   icon: '●', label: 'B' },
-  { bg: 'bg-yellow-400', icon: '■', label: 'C', textDark: true },
-  { bg: 'bg-emerald-500', icon: '★', label: 'D' },
+  { bg: 'bg-red-500',    Icon: Zap,      label: 'A' },
+  { bg: 'bg-blue-500',   Icon: Droplets, label: 'B' },
+  { bg: 'bg-yellow-400', Icon: Star,     label: 'C', textDark: true },
+  { bg: 'bg-emerald-500', Icon: Leaf,    label: 'D' },
 ];
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || (import.meta.env.PROD ? '' : 'http://localhost:4000');
-
-// Build a CSS style object from a background string (gradient or image URL)
-function bgStyle(bg) {
-  if (!bg) return {};
-  if (bg.startsWith('http')) {
-    return { backgroundImage: `url(${bg})`, backgroundSize: 'cover', backgroundPosition: 'center' };
-  }
-  return { background: bg };
-}
 
 export default function HostView() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const quizId = searchParams.get('quizId');
   const created = useRef(false);
+  const gamePinRef = useRef(null);
   const [error, setError] = useState(null);
+  const [confirmEnd, setConfirmEnd] = useState(false);
   const [quizTitle, setQuizTitle] = useState('');
 
   // Theme state
@@ -47,7 +41,6 @@ export default function HostView() {
   const [totalQuestions, setTotalQuestions] = useState(0);
   const [answerCount, setAnswerCount] = useState({ count: 0, total: 0 });
   const [countdown, setCountdown] = useState(3);
-  const [questionBg, setQuestionBg] = useState(null);
 
   // Results state
   const [correctAnswer, setCorrectAnswer] = useState(null);
@@ -55,37 +48,80 @@ export default function HostView() {
   const [leaderboard, setLeaderboard] = useState([]);
   const [finalLeaderboard, setFinalLeaderboard] = useState([]);
 
+  // Helper: get correct answer indices as array
+  const correctIndices = correctAnswer !== null
+    ? (Array.isArray(correctAnswer) ? correctAnswer : [correctAnswer])
+    : [];
+
   // ── Create game once ───────────────────────────────────────────────────────
   useEffect(() => {
     if (created.current) return;
     created.current = true;
 
-    if (!quizId) {
-      setError('Geen quiz geselecteerd. Ga naar je dashboard om een quiz te starten.');
-      return;
-    }
-
-    socket.emit('host:create', { quizId: parseInt(quizId) }, (response) => {
-      if (response.error) {
-        setError(response.error);
-        return;
-      }
-      setGamePin(response.gamePin);
-      setQuizTitle(response.quizTitle || '');
-      if (response.theme) setThemeKey(response.theme);
-      setGameState('lobby');
-
+    const fetchQR = (pin) => {
       const clientHost = window.location.host;
-      fetch(`${SERVER_URL}/api/qrcode/${response.gamePin}?host=${encodeURIComponent(clientHost)}`)
+      fetch(`${SERVER_URL}/api/qrcode/${pin}?host=${encodeURIComponent(clientHost)}`)
         .then(r => r.json())
         .then(data => setQrCode(data.qrCode))
         .catch(() => console.warn('QR code fetch failed'));
-    });
+    };
+
+    const createNewGame = () => {
+      if (!quizId) {
+        setError('Geen quiz geselecteerd. Ga naar je dashboard om een quiz te starten.');
+        return;
+      }
+      socket.emit('host:create', { quizId: parseInt(quizId) }, (response) => {
+        if (response.error) { setError(response.error); return; }
+        const pin = response.gamePin;
+        setGamePin(pin);
+        gamePinRef.current = pin;
+        setQuizTitle(response.quizTitle || '');
+        if (response.theme) setThemeKey(response.theme);
+        setGameState('lobby');
+        sessionStorage.setItem('hostSession', JSON.stringify({ gamePin: pin, quizId }));
+        fetchQR(pin);
+      });
+    };
+
+    const savedSession = sessionStorage.getItem('hostSession');
+    if (savedSession) {
+      try {
+        const { gamePin: savedPin, quizId: savedQuizId } = JSON.parse(savedSession);
+        if (String(savedQuizId) === String(quizId)) {
+          socket.emit('host:rejoin', { gamePin: savedPin }, (res) => {
+            if (res?.success) {
+              setGamePin(savedPin);
+              gamePinRef.current = savedPin;
+              setQuizTitle(res.quizTitle || '');
+              if (res.theme) setThemeKey(res.theme);
+              setPlayers(res.players || []);
+              setTotalQuestions(res.totalQuestions || 0);
+              setQuestionIndex(Math.max(res.currentQuestion, 0));
+              if (res.status === 'lobby') {
+                setGameState('lobby');
+                fetchQR(savedPin);
+              } else {
+                setGameState('reconnected');
+              }
+              return;
+            }
+            sessionStorage.removeItem('hostSession');
+            createNewGame();
+          });
+          return;
+        }
+      } catch (e) {
+        sessionStorage.removeItem('hostSession');
+      }
+    }
+
+    createNewGame();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Socket event listeners ──────────────────────────────────────────────
   useEffect(() => {
-    function onPlayerJoined({ players }) { setPlayers(players); }
+    function onPlayerJoined({ players }) { setPlayers(players || []); }
     function onQuestionShow({ index, total, text, options, timeLimit, background, theme: qTheme }) {
       setQuestion({ text, options, timeLimit });
       setQuestionIndex(index);
@@ -93,20 +129,26 @@ export default function HostView() {
       setCorrectAnswer(null);
       setResults(null);
       setAnswerCount({ count: 0, total: 0 });
-      setQuestionBg(background || null);
       if (qTheme) setThemeKey(qTheme);
       setGameState('question');
     }
     function onAnswerCount({ count, total }) { setAnswerCount({ count, total }); }
-    function onQuestionEnd({ correctAnswer, results, leaderboard }) {
-      setCorrectAnswer(correctAnswer);
-      setResults(results);
-      setLeaderboard(leaderboard);
+    function onQuestionEnd({ correctAnswer: ca, results: r, leaderboard: lb }) {
+      setCorrectAnswer(ca ?? null);
+      setResults(r || null);
+      setLeaderboard(lb || []);
       setGameState('questionEnd');
     }
-    function onGameEnd({ finalLeaderboard }) {
-      setFinalLeaderboard(finalLeaderboard);
+    function onGameEnd({ finalLeaderboard: flb }) {
+      sessionStorage.removeItem('hostSession');
+      setFinalLeaderboard(flb || []);
       setGameState('finished');
+    }
+    function onConnect() {
+      if (!gamePinRef.current) return;
+      socket.emit('host:rejoin', { gamePin: gamePinRef.current }, (res) => {
+        if (res?.error) console.warn('[HOST] Rejoin failed:', res.error);
+      });
     }
 
     socket.on('player:joined', onPlayerJoined);
@@ -114,6 +156,7 @@ export default function HostView() {
     socket.on('answer:count', onAnswerCount);
     socket.on('question:end', onQuestionEnd);
     socket.on('game:end', onGameEnd);
+    socket.on('connect', onConnect);
 
     return () => {
       socket.off('player:joined', onPlayerJoined);
@@ -121,6 +164,7 @@ export default function HostView() {
       socket.off('answer:count', onAnswerCount);
       socket.off('question:end', onQuestionEnd);
       socket.off('game:end', onGameEnd);
+      socket.off('connect', onConnect);
     };
   }, []);
 
@@ -142,11 +186,18 @@ export default function HostView() {
     socket.emit('next:question', { gamePin });
   };
 
-  // Compute game screen background (question bg takes priority, then theme)
-  const gameScreenStyle = questionBg
-    ? bgStyle(questionBg)
-    : (theme.gameStyle || {});
-  const gameScreenClass = questionBg ? '' : (theme.gameBg || 'bg-gray-900');
+  const handleEndGame = () => {
+    if (!confirmEnd) { setConfirmEnd(true); return; }
+    setConfirmEnd(false);
+    socket.emit('game:end_early', { gamePin });
+  };
+
+  const handleKickPlayer = (playerId) => {
+    socket.emit('player:kick', { gamePin, playerId });
+  };
+
+  const gameScreenStyle = theme.gameStyle || {};
+  const gameScreenClass = theme.gameBg || 'bg-gray-900';
 
   // ─────────────────────────────────────────────────────────────────────────
   // Render states
@@ -215,12 +266,17 @@ export default function HostView() {
         <div className="flex-1 px-6 py-2 overflow-auto">
           <div className="flex flex-wrap gap-2">
             {players.map(p => (
-              <span
+              <div
                 key={p.id}
-                className={`${theme.playerBadge} hover:brightness-110 text-white rounded-full px-4 py-2 font-semibold text-sm animate-pop`}
+                className={`${theme.playerBadge} text-white rounded-full px-4 py-2 font-semibold text-sm animate-pop flex items-center gap-1.5`}
               >
-                {p.nickname}
-              </span>
+                <span>{p.nickname}</span>
+                <button
+                  onClick={() => handleKickPlayer(p.id)}
+                  className="text-white/40 hover:text-white transition-colors font-black text-base leading-none"
+                  title="Verwijder speler"
+                >×</button>
+              </div>
             ))}
           </div>
         </div>
@@ -261,11 +317,22 @@ export default function HostView() {
         {/* Header bar */}
         <div
           className={`${theme.headerBg || ''} flex items-center justify-between px-6 py-3`}
-          style={theme.headerStyle || (questionBg ? { background: 'rgba(0,0,0,0.5)' } : {})}
+          style={theme.headerStyle || {}}
         >
-          <div className="text-white font-bold text-lg">
-            Vraag <span className="text-purple-400">{questionIndex + 1}</span>
-            <span className="text-gray-400"> / {totalQuestions}</span>
+          <div className="flex items-center gap-3">
+            <div className="text-white font-bold text-lg">
+              Vraag <span className="text-purple-400">{questionIndex + 1}</span>
+              <span className="text-gray-400"> / {totalQuestions}</span>
+            </div>
+            {confirmEnd ? (
+              <button onClick={handleEndGame} className="bg-red-600 hover:bg-red-500 text-white px-3 py-1 rounded-lg text-sm font-bold">
+                Zeker?
+              </button>
+            ) : (
+              <button onClick={handleEndGame} className="bg-red-900/50 hover:bg-red-800 text-red-300 hover:text-white px-3 py-1 rounded-lg text-xs font-semibold transition-all">
+                Stop spel
+              </button>
+            )}
           </div>
           <Timer duration={question.timeLimit} />
           <div className="text-right">
@@ -299,8 +366,8 @@ export default function HostView() {
               key={i}
               className={`${ANSWERS[i].bg} rounded-2xl p-5 flex items-center gap-4 shadow-lg`}
             >
-              <span className={`text-3xl font-black ${ANSWERS[i].textDark ? 'text-black' : 'text-white'}`}>
-                {ANSWERS[i].icon}
+              <span className={ANSWERS[i].textDark ? 'text-black' : 'text-white'}>
+                {(() => { const Icon = ANSWERS[i].Icon; return <Icon size={28} strokeWidth={2.5} />; })()}
               </span>
               <span className={`text-xl font-bold ${ANSWERS[i].textDark ? 'text-black' : 'text-white'}`}>
                 {opt}
@@ -316,11 +383,15 @@ export default function HostView() {
   if (gameState === 'questionEnd' && question) {
     return (
       <div className={`min-h-screen ${gameScreenClass} flex flex-col`} style={gameScreenStyle}>
-        {/* Correct answer banner */}
-        <div className={`${correctAnswer !== null ? ANSWERS[correctAnswer].bg : 'bg-gray-700'} p-4 text-center`}>
-          <p className="text-white font-black text-2xl">
-            ✓ {correctAnswer !== null ? question.options[correctAnswer] : '—'}
-          </p>
+        {/* Correct answer banner — supports multiple correct */}
+        <div className="p-4 text-center flex flex-wrap gap-2 justify-center">
+          {correctIndices.length > 0 ? correctIndices.map(ci => (
+            <span key={ci} className={`${ANSWERS[ci]?.bg || 'bg-gray-700'} px-6 py-3 rounded-xl text-white font-black text-2xl inline-flex items-center gap-2`}>
+              ✓ {question.options[ci]}
+            </span>
+          )) : (
+            <span className="bg-gray-700 px-6 py-3 rounded-xl text-white font-black text-2xl">—</span>
+          )}
         </div>
 
         <div className="flex flex-1 gap-4 p-6">
@@ -329,41 +400,53 @@ export default function HostView() {
             <h3 className="text-white font-bold text-lg mb-4">Antwoord verdeling</h3>
             <div className="flex items-end gap-3 h-48">
               {question.options.map((opt, i) => {
-                const count = results?.counts[i] ?? 0;
+                const count = results?.counts?.[i] ?? 0;
                 const total = results?.totalAnswers || 1;
                 const pct = Math.round((count / Math.max(total, 1)) * 100);
+                const isCorrect = correctIndices.includes(i);
                 return (
                   <div key={i} className="flex-1 flex flex-col items-center gap-1">
                     <span className="text-white font-bold">{count}</span>
                     <div className="w-full flex flex-col justify-end" style={{ height: '160px' }}>
                       <div
-                        className={`${ANSWERS[i].bg} w-full rounded-t-lg transition-all duration-700 ${i === correctAnswer ? 'ring-4 ring-white' : 'opacity-70'}`}
+                        className={`${ANSWERS[i].bg} w-full rounded-t-lg transition-all duration-700 ${isCorrect ? 'ring-4 ring-white' : 'opacity-70'}`}
                         style={{ height: `${Math.max(pct * 1.4, pct > 0 ? 12 : 0)}px` }}
                       />
                     </div>
                     <span className="text-gray-400 text-xs">{pct}%</span>
-                    <span className="text-2xl">{ANSWERS[i].icon}</span>
+                    <span className={`flex justify-center ${ANSWERS[i].textDark ? 'text-black' : 'text-white'}`}>
+                      {(() => { const Icon = ANSWERS[i].Icon; return <Icon size={20} strokeWidth={2.5} />; })()}
+                    </span>
                   </div>
                 );
               })}
             </div>
           </div>
 
-          {/* Leaderboard */}
-          <div className="w-80">
+          {/* Leaderboard — vertically centered */}
+          <div className="w-80 flex flex-col justify-center">
             <h3 className="text-white font-bold text-lg mb-4">Ranglijst</h3>
-            <Leaderboard entries={leaderboard.slice(0, 6)} />
+            <Leaderboard entries={(leaderboard || []).slice(0, 6)} />
           </div>
         </div>
 
         {/* Next button */}
-        <div className="flex justify-center pb-8">
+        <div className="flex justify-center items-center gap-4 pb-8">
           <button
             onClick={handleNextQuestion}
             className="bg-purple-600 hover:bg-purple-500 active:bg-purple-700 text-white px-14 py-5 rounded-full text-xl font-black transition-all shadow-lg hover:shadow-xl transform hover:scale-105"
           >
             {questionIndex + 1 >= totalQuestions ? '🏆 Eindresultaten' : 'Volgende Vraag →'}
           </button>
+          {confirmEnd ? (
+            <button onClick={handleEndGame} className="bg-red-600 hover:bg-red-500 text-white px-5 py-3 rounded-full font-bold">
+              Zeker stoppen?
+            </button>
+          ) : (
+            <button onClick={handleEndGame} className="bg-red-900/50 hover:bg-red-800 text-red-300 hover:text-white px-5 py-3 rounded-full text-sm font-semibold transition-all">
+              Stop spel
+            </button>
+          )}
         </div>
       </div>
     );
@@ -371,11 +454,11 @@ export default function HostView() {
 
   // ── FINISHED (final podium) ───────────────────────────────────────────────
   if (gameState === 'finished') {
-    const top3 = finalLeaderboard.slice(0, 3);
+    const top3 = (finalLeaderboard || []).slice(0, 3);
     const podiumConfig = [
-      { pos: 1, medal: '🥇', height: 'h-36', bg: 'bg-yellow-400', textColor: 'text-black' },
-      { pos: 2, medal: '🥈', height: 'h-24', bg: 'bg-slate-300', textColor: 'text-black' },
-      { pos: 3, medal: '🥉', height: 'h-16', bg: 'bg-orange-500', textColor: 'text-white' },
+      { pos: 1, height: 'h-36', bg: 'bg-gradient-to-t from-amber-600 to-amber-400', textColor: 'text-white' },
+      { pos: 2, height: 'h-24', bg: 'bg-gradient-to-t from-slate-500 to-slate-300', textColor: 'text-white' },
+      { pos: 3, height: 'h-16', bg: 'bg-gradient-to-t from-orange-700 to-orange-500', textColor: 'text-white' },
     ];
     const displayOrder = [top3[1], top3[0], top3[2]];
 
@@ -387,14 +470,19 @@ export default function HostView() {
         <h1 className="text-5xl font-black text-white mb-2 mt-4">Game Over!</h1>
         <p className="text-gray-400 mb-8">Eindresultaten</p>
 
-        {/* Podium */}
+        {/* Podium — restyled with gradients */}
         <div className="flex items-end gap-2 mb-10">
           {displayOrder.map((entry, di) => {
             if (!entry) return <div key={di} className="w-32" />;
             const cfg = podiumConfig[di === 0 ? 1 : di === 1 ? 0 : 2];
+            const rank = di === 0 ? 2 : di === 1 ? 1 : 3;
             return (
               <div key={entry.id} className="flex flex-col items-center w-36 animate-slide-up">
-                <span className="text-4xl mb-1">{cfg.medal}</span>
+                <span className={`w-12 h-12 rounded-full flex items-center justify-center text-xl font-black mb-2 shadow-lg ${
+                  rank === 1 ? 'bg-gradient-to-br from-amber-400 to-yellow-500 text-black'
+                  : rank === 2 ? 'bg-gradient-to-br from-slate-300 to-gray-400 text-black'
+                  : 'bg-gradient-to-br from-orange-400 to-amber-600 text-white'
+                }`}>{rank}</span>
                 <div className={`${cfg.bg} w-full rounded-t-xl flex items-center justify-center p-3 text-center ${cfg.height}`}>
                   <div>
                     <p className={`font-black text-base ${cfg.textColor} break-words`}>{entry.nickname}</p>
@@ -406,9 +494,9 @@ export default function HostView() {
           })}
         </div>
 
-        {/* Full leaderboard */}
-        <div className="w-full max-w-lg">
-          <Leaderboard entries={finalLeaderboard} />
+        {/* Full leaderboard — vertically centered */}
+        <div className="w-full max-w-lg flex-1 flex flex-col justify-center">
+          <Leaderboard entries={finalLeaderboard || []} />
         </div>
 
         <button
@@ -418,6 +506,18 @@ export default function HostView() {
           ← Terug naar Dashboard
         </button>
       </div>
+    );
+  }
+
+  // ── RECONNECTED (after page refresh, awaiting next question:end event) ──────
+  if (gameState === 'reconnected') {
+    return (
+      <Screen theme={theme}>
+        <div className="text-emerald-400 text-3xl font-black mb-2">✓ Verbinding hersteld</div>
+        <p className="text-white text-xl mb-1">PIN: <span className="font-black text-yellow-300">{gamePin}</span></p>
+        <p className="text-gray-400 mb-6">{players.length} spelers · Vraag {questionIndex + 1}/{totalQuestions}</p>
+        <p className="text-gray-500 text-sm animate-pulse">Wachten op einde van huidige vraag...</p>
+      </Screen>
     );
   }
 
