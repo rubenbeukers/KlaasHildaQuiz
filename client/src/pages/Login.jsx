@@ -30,7 +30,7 @@ export default function Login() {
         <div className="text-center mb-6">
           <span className="text-4xl">🔥</span>
           <h1 className="text-2xl font-black text-gray-900 mt-2">Login</h1>
-          <p className="text-gray-500 text-sm mt-1">Log in op je Quizonaire account</p>
+          <p className="text-gray-500 text-sm mt-1">Log in op je Quizmaster account</p>
         </div>
 
         {error && (

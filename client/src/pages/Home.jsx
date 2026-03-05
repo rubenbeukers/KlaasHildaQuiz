@@ -10,7 +10,7 @@ export default function Home() {
       {/* Logo */}
       <div className="text-center animate-pop">
         <div className="text-7xl mb-3">🔥</div>
-        <h1 className="text-6xl font-black text-white tracking-tight">Quizonaire</h1>
+        <h1 className="text-6xl font-black text-white tracking-tight">Quizmaster</h1>
         <p className="text-indigo-300 text-lg mt-2">Real-time multiplayer quiz</p>
       </div>
 

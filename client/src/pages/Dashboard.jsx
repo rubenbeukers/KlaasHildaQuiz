@@ -89,7 +89,7 @@ export default function Dashboard() {
               onClick={() => navigate('/')}
             >
               <span className="text-xl">🔥</span>
-              <h1 className="text-lg font-extrabold text-slate-900">Quizonaire</h1>
+              <h1 className="text-lg font-extrabold text-slate-900">Quizmaster</h1>
             </div>
             <div className="flex items-center gap-3">
               <div className="hidden sm:flex items-center gap-2">
