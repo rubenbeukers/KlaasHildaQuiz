@@ -29,10 +29,6 @@ if (stripeKey) {
 
 // POST /api/payments/create-checkout - Create Stripe Checkout session
 router.post('/create-checkout', authenticateToken, async (req, res) => {
-  if (!stripe) {
-    return res.status(503).json({ error: 'Betalingen zijn momenteel niet beschikbaar. Neem contact op met de beheerder.' });
-  }
-
   try {
     const { quizId, discountCode } = req.body;
     if (!quizId) return res.status(400).json({ error: 'Quiz ID required' });
@@ -76,7 +72,7 @@ router.post('/create-checkout', authenticateToken, async (req, res) => {
     }
 
     if (finalPrice === 0) {
-      // Free tier or 100% discount — mark as paid directly
+      // Free tier or 100% discount — mark as paid directly (no Stripe needed)
       await prisma.quiz.update({
         where: { id: quiz.id },
         data: { isPaid: true },
@@ -89,6 +85,11 @@ router.post('/create-checkout', authenticateToken, async (req, res) => {
         });
       }
       return res.json({ free: true });
+    }
+
+    // Only require Stripe when an actual payment is needed
+    if (!stripe) {
+      return res.status(503).json({ error: 'Betalingen zijn momenteel niet beschikbaar. Neem contact op met de beheerder.' });
     }
 
     const clientUrl = process.env.CLIENT_URL || req.headers.origin || 'https://klaashildaquiz.onrender.com';
