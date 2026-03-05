@@ -92,7 +92,7 @@ router.post('/create-checkout', authenticateToken, async (req, res) => {
       return res.status(503).json({ error: 'Betalingen zijn momenteel niet beschikbaar. Neem contact op met de beheerder.' });
     }
 
-    const clientUrl = process.env.CLIENT_URL || req.headers.origin || 'https://klaashildaquiz.onrender.com';
+    const clientUrl = process.env.CLIENT_URL || req.headers.origin || 'https://quizonaire.onrender.com';
 
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card', 'ideal'],
