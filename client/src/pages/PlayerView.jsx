@@ -4,6 +4,7 @@ import socket from '../socket.js';
 import Timer from '../components/Timer.jsx';
 import { getTheme } from '../themes.js';
 import { Zap, Droplets, Star, Leaf } from 'lucide-react';
+import confetti from 'canvas-confetti';
 
 const ANSWERS = [
   { bg: 'bg-red-500',     activeBg: 'bg-red-700',     Icon: Zap,      label: 'A' },
@@ -52,6 +53,7 @@ export default function PlayerView() {
   const [correctAnswer, setCorrectAnswer]   = useState(null);
   const [leaderboard, setLeaderboard]       = useState([]);
   const [finalData, setFinalData]           = useState(null);
+  const [midLeaderboard, setMidLeaderboard] = useState(null); // tussenstand
 
   const myId = socket.id;
   const joinedRef = useRef(false);
@@ -150,6 +152,14 @@ export default function PlayerView() {
       joinedRef.current = false;
     });
 
+    socket.on('leaderboard:show', ({ leaderboard: lb }) => {
+      setMidLeaderboard(lb || []);
+    });
+
+    socket.on('leaderboard:hide', () => {
+      setMidLeaderboard(null);
+    });
+
     return () => {
       socket.off('game:started');
       socket.off('question:show');
@@ -157,8 +167,27 @@ export default function PlayerView() {
       socket.off('game:end');
       socket.off('host:disconnected');
       socket.off('player:kicked');
+      socket.off('leaderboard:show');
+      socket.off('leaderboard:hide');
     };
   }, []);
+
+  // Confetti for top-3 finish
+  useEffect(() => {
+    if (gameState !== 'finished' || !finalData?.me) return;
+    if (finalData.me.rank > 3) return;
+    const colors = finalData.me.rank === 1
+      ? ['#facc15', '#fbbf24', '#f59e0b', '#ffffff']
+      : ['#a855f7', '#60a5fa', '#34d399'];
+    const duration = finalData.me.rank === 1 ? 5000 : 2500;
+    const end = Date.now() + duration;
+    const frame = () => {
+      confetti({ particleCount: 5, angle: 60, spread: 55, origin: { x: 0 }, colors });
+      confetti({ particleCount: 5, angle: 120, spread: 55, origin: { x: 1 }, colors });
+      if (Date.now() < end) requestAnimationFrame(frame);
+    };
+    frame();
+  }, [gameState, finalData]);
 
   // ── Timeout fallback: if stuck in 'answered' for 35s, force transition ──
   useEffect(() => {
@@ -233,6 +262,39 @@ export default function PlayerView() {
     : [];
 
   // ─────────────────────────────────────────────────────────────────────────
+  // TUSSENSTAND OVERLAY (shown on top of any screen)
+  // ─────────────────────────────────────────────────────────────────────────
+  if (midLeaderboard !== null) {
+    const me = midLeaderboard.find(p => p.id === socket.id);
+    return (
+      <div className={`min-h-screen ${qBgClass} flex flex-col items-center justify-center text-white p-6`} style={qBgStyle}>
+        <p className="text-purple-300 text-xs uppercase tracking-widest font-bold mb-1">Tussenstand</p>
+        <h2 className="text-3xl font-black mb-6">🏆 Ranglijst</h2>
+        {me && (
+          <div className="bg-indigo-700 rounded-2xl px-6 py-3 mb-5 text-center">
+            <p className="text-indigo-300 text-sm">Jouw positie</p>
+            <p className="text-2xl font-black">#{me.rank} · {me.score.toLocaleString()} pts</p>
+          </div>
+        )}
+        <div className="w-full max-w-sm space-y-2">
+          {midLeaderboard.slice(0, 8).map((entry, i) => (
+            <div key={entry.id} className={`flex items-center justify-between px-4 py-3 rounded-xl font-semibold
+              ${entry.id === socket.id ? 'bg-indigo-700 ring-2 ring-yellow-400' : 'bg-gray-800/80'}`}
+            >
+              <div className="flex items-center gap-3">
+                <RankBadge rank={i + 1} />
+                <span className="truncate max-w-[140px]">{entry.nickname}</span>
+              </div>
+              <span className="font-black tabular-nums">{entry.score.toLocaleString()}</span>
+            </div>
+          ))}
+        </div>
+        <p className="text-gray-500 text-sm mt-6 animate-pulse">Wachten op de host...</p>
+      </div>
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
   // JOIN SCREEN
   // ─────────────────────────────────────────────────────────────────────────
   if (gameState === 'join') {
@@ -240,7 +302,7 @@ export default function PlayerView() {
       <div className="min-h-screen bg-indigo-950 flex items-center justify-center p-4">
         <div className="bg-white rounded-3xl p-8 w-full max-w-sm shadow-2xl animate-slide-up">
           <div className="text-center mb-6">
-            <span className="text-5xl">⚡</span>
+            <span className="text-5xl">🔥</span>
             <h1 className="text-3xl font-black text-indigo-900 mt-2">Meedoen</h1>
           </div>
 

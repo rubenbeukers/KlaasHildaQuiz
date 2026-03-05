@@ -4,7 +4,8 @@ import socket from '../socket.js';
 import Timer from '../components/Timer.jsx';
 import Leaderboard from '../components/Leaderboard.jsx';
 import { getTheme } from '../themes.js';
-import { Zap, Droplets, Star, Leaf } from 'lucide-react';
+import { Zap, Droplets, Star, Leaf, Trophy } from 'lucide-react';
+import confetti from 'canvas-confetti';
 
 const ANSWERS = [
   { bg: 'bg-red-500',    Icon: Zap,      label: 'A' },
@@ -47,6 +48,9 @@ export default function HostView() {
   const [results, setResults] = useState(null);
   const [leaderboard, setLeaderboard] = useState([]);
   const [finalLeaderboard, setFinalLeaderboard] = useState([]);
+
+  // Tussenstand
+  const [showMidLeaderboard, setShowMidLeaderboard] = useState(false);
 
   // Helper: get correct answer indices as array
   const correctIndices = correctAnswer !== null
@@ -196,6 +200,30 @@ export default function HostView() {
     socket.emit('player:kick', { gamePin, playerId });
   };
 
+  const handleShowMidLeaderboard = () => {
+    socket.emit('leaderboard:show', { gamePin });
+    setShowMidLeaderboard(true);
+  };
+
+  const handleHideMidLeaderboard = () => {
+    socket.emit('leaderboard:hide', { gamePin });
+    setShowMidLeaderboard(false);
+  };
+
+  // Confetti burst for podium
+  useEffect(() => {
+    if (gameState !== 'finished') return;
+    const duration = 4000;
+    const end = Date.now() + duration;
+    const colors = ['#a855f7', '#ec4899', '#facc15', '#34d399', '#60a5fa'];
+    const frame = () => {
+      confetti({ particleCount: 6, angle: 60, spread: 55, origin: { x: 0 }, colors });
+      confetti({ particleCount: 6, angle: 120, spread: 55, origin: { x: 1 }, colors });
+      if (Date.now() < end) requestAnimationFrame(frame);
+    };
+    frame();
+  }, [gameState]);
+
   const gameScreenStyle = theme.gameStyle || {};
   const gameScreenClass = theme.gameBg || 'bg-gray-900';
 
@@ -233,33 +261,32 @@ export default function HostView() {
         style={theme.lobbyStyle || {}}
       >
         {/* Top bar */}
-        <div className="flex items-start justify-between p-6 pb-2">
-          <div>
-            <p className={`${theme.textMuted} text-sm uppercase tracking-widest font-semibold mb-1`}>Game PIN</p>
-            <p className={`text-7xl font-black tracking-widest ${theme.pinColor}`}>{gamePin}</p>
-            <p className={`${theme.textSecondary} mt-1 text-sm`}>
-              Of scan de QR code → <span className="font-mono">{window.location.host}/join?pin={gamePin}</span>
-            </p>
-          </div>
-
-          {/* QR Code */}
+        <div className="flex items-start gap-6 p-6 pb-2">
+          {/* QR Code — groot en prominent */}
           <div className="flex-shrink-0">
             {qrCode ? (
               <div className="bg-white p-3 rounded-2xl shadow-2xl">
-                <img src={qrCode} alt="QR Code" className="w-44 h-44" />
+                <img src={qrCode} alt="QR Code" className="w-56 h-56" />
               </div>
             ) : (
-              <div className="w-44 h-44 bg-black/20 rounded-2xl animate-pulse" />
+              <div className="w-56 h-56 bg-black/20 rounded-2xl animate-pulse" />
             )}
+            <p className={`${theme.textMuted} text-xs text-center mt-2`}>📷 Scan om mee te doen</p>
           </div>
-        </div>
 
-        {/* Player count */}
-        <div className="px-6 py-2">
-          <p className={`${theme.textSecondary} text-lg`}>
-            <span className="text-3xl font-black text-white">{players.length}</span>
-            {' '}speler{players.length !== 1 ? 's' : ''}
-          </p>
+          {/* PIN + info */}
+          <div className="flex-1">
+            <p className={`${theme.textMuted} text-sm uppercase tracking-widest font-semibold mb-1`}>Game PIN</p>
+            <p className={`text-8xl font-black tracking-widest ${theme.pinColor}`}>{gamePin}</p>
+            <p className={`${theme.textSecondary} mt-2 text-sm`}>
+              🌐 <span className="font-mono">{window.location.host}/join</span>
+            </p>
+            {/* Player count */}
+            <p className={`${theme.textSecondary} text-lg mt-4`}>
+              <span className="text-4xl font-black text-white">{players.length}</span>
+              {' '}speler{players.length !== 1 ? 's' : ''} verbonden
+            </p>
+          </div>
         </div>
 
         {/* Players grid */}
@@ -431,7 +458,22 @@ export default function HostView() {
         </div>
 
         {/* Next button */}
-        <div className="flex justify-center items-center gap-4 pb-8">
+        <div className="flex flex-wrap justify-center items-center gap-3 pb-8 px-4">
+          {showMidLeaderboard ? (
+            <button
+              onClick={handleHideMidLeaderboard}
+              className="bg-indigo-600 hover:bg-indigo-500 text-white px-8 py-4 rounded-full text-lg font-black transition-all shadow-lg"
+            >
+              ✕ Verberg Tussenstand
+            </button>
+          ) : (
+            <button
+              onClick={handleShowMidLeaderboard}
+              className="bg-indigo-700 hover:bg-indigo-600 text-white px-6 py-4 rounded-full text-base font-bold transition-all flex items-center gap-2"
+            >
+              <Trophy size={18} /> Tussenstand
+            </button>
+          )}
           <button
             onClick={handleNextQuestion}
             className="bg-purple-600 hover:bg-purple-500 active:bg-purple-700 text-white px-14 py-5 rounded-full text-xl font-black transition-all shadow-lg hover:shadow-xl transform hover:scale-105"
@@ -455,38 +497,47 @@ export default function HostView() {
   // ── FINISHED (final podium) ───────────────────────────────────────────────
   if (gameState === 'finished') {
     const top3 = (finalLeaderboard || []).slice(0, 3);
-    const podiumConfig = [
-      { pos: 1, height: 'h-36', bg: 'bg-gradient-to-t from-amber-600 to-amber-400', textColor: 'text-white' },
-      { pos: 2, height: 'h-24', bg: 'bg-gradient-to-t from-slate-500 to-slate-300', textColor: 'text-white' },
-      { pos: 3, height: 'h-16', bg: 'bg-gradient-to-t from-orange-700 to-orange-500', textColor: 'text-white' },
+    // displayOrder: [2nd, 1st, 3rd] for visual podium layout
+    const displayOrder = [
+      top3[1] ? { ...top3[1], rank: 2, delay: '0ms',    height: 'h-28', bg: 'bg-gradient-to-t from-slate-500 to-slate-300' } : null,
+      top3[0] ? { ...top3[0], rank: 1, delay: '600ms',  height: 'h-44', bg: 'bg-gradient-to-t from-amber-600 to-amber-400' } : null,
+      top3[2] ? { ...top3[2], rank: 3, delay: '300ms',  height: 'h-20', bg: 'bg-gradient-to-t from-orange-700 to-orange-500' } : null,
     ];
-    const displayOrder = [top3[1], top3[0], top3[2]];
 
     return (
       <div
         className={`min-h-screen ${theme.gameBg || 'bg-gray-900'} flex flex-col items-center p-6 overflow-auto`}
         style={theme.gameStyle || {}}
       >
-        <h1 className="text-5xl font-black text-white mb-2 mt-4">Game Over!</h1>
-        <p className="text-gray-400 mb-8">Eindresultaten</p>
+        <h1 className="text-5xl font-black text-white mb-1 mt-4">🏆 Game Over!</h1>
+        <p className="text-gray-400 mb-10">Eindresultaten</p>
 
-        {/* Podium — restyled with gradients */}
-        <div className="flex items-end gap-2 mb-10">
+        {/* Staggered animated podium */}
+        <div className="flex items-end gap-3 mb-10">
           {displayOrder.map((entry, di) => {
-            if (!entry) return <div key={di} className="w-32" />;
-            const cfg = podiumConfig[di === 0 ? 1 : di === 1 ? 0 : 2];
-            const rank = di === 0 ? 2 : di === 1 ? 1 : 3;
+            if (!entry) return <div key={di} className="w-36" />;
+            const rankColors = {
+              1: 'bg-gradient-to-br from-amber-400 to-yellow-500 text-black',
+              2: 'bg-gradient-to-br from-slate-300 to-gray-400 text-black',
+              3: 'bg-gradient-to-br from-orange-400 to-amber-600 text-white',
+            };
             return (
-              <div key={entry.id} className="flex flex-col items-center w-36 animate-slide-up">
-                <span className={`w-12 h-12 rounded-full flex items-center justify-center text-xl font-black mb-2 shadow-lg ${
-                  rank === 1 ? 'bg-gradient-to-br from-amber-400 to-yellow-500 text-black'
-                  : rank === 2 ? 'bg-gradient-to-br from-slate-300 to-gray-400 text-black'
-                  : 'bg-gradient-to-br from-orange-400 to-amber-600 text-white'
-                }`}>{rank}</span>
-                <div className={`${cfg.bg} w-full rounded-t-xl flex items-center justify-center p-3 text-center ${cfg.height}`}>
+              <div
+                key={entry.id}
+                className="flex flex-col items-center w-36"
+                style={{ animation: `slideUp 0.6s ease-out ${entry.delay} both` }}
+              >
+                {/* Crown for winner */}
+                {entry.rank === 1 && (
+                  <span className="text-3xl mb-1 animate-bounce">👑</span>
+                )}
+                <span className={`w-12 h-12 rounded-full flex items-center justify-center text-xl font-black mb-2 shadow-lg ${rankColors[entry.rank]}`}>
+                  {entry.rank}
+                </span>
+                <div className={`${entry.bg} w-full rounded-t-2xl flex items-center justify-center p-3 text-center shadow-xl ${entry.height}`}>
                   <div>
-                    <p className={`font-black text-base ${cfg.textColor} break-words`}>{entry.nickname}</p>
-                    <p className={`font-bold text-sm ${cfg.textColor} opacity-80`}>{entry.score.toLocaleString()} pts</p>
+                    <p className="font-black text-base text-white break-words drop-shadow">{entry.nickname}</p>
+                    <p className="font-bold text-sm text-white/80">{entry.score.toLocaleString()} pts</p>
                   </div>
                 </div>
               </div>
@@ -494,14 +545,14 @@ export default function HostView() {
           })}
         </div>
 
-        {/* Full leaderboard — vertically centered */}
-        <div className="w-full max-w-lg flex-1 flex flex-col justify-center">
+        {/* Full leaderboard */}
+        <div className="w-full max-w-lg">
           <Leaderboard entries={finalLeaderboard || []} />
         </div>
 
         <button
           onClick={() => navigate('/dashboard')}
-          className="mt-8 bg-indigo-700 hover:bg-indigo-600 text-white px-10 py-3 rounded-full font-bold transition-all"
+          className="mt-8 mb-6 bg-indigo-700 hover:bg-indigo-600 text-white px-10 py-3 rounded-full font-bold transition-all"
         >
           ← Terug naar Dashboard
         </button>

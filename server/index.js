@@ -258,6 +258,20 @@ io.on('connection', (socket) => {
     console.log(`[KICK] ${nickname} from ${gamePin}`);
   });
 
+  // ── HOST: show/hide mid-game leaderboard to all players ─────────────────
+  socket.on('leaderboard:show', ({ gamePin }) => {
+    const game = gameManager.getGame(gamePin);
+    if (!game || game.hostSocketId !== socket.id) return;
+    const leaderboard = gameManager.getLeaderboard(gamePin);
+    io.to(gamePin).emit('leaderboard:show', { leaderboard });
+  });
+
+  socket.on('leaderboard:hide', ({ gamePin }) => {
+    const game = gameManager.getGame(gamePin);
+    if (!game || game.hostSocketId !== socket.id) return;
+    io.to(gamePin).emit('leaderboard:hide');
+  });
+
   // ── Disconnect handling ──────────────────────────────────────────────────
   socket.on('disconnect', () => {
     console.log(`[-] Disconnected: ${socket.id}`);
