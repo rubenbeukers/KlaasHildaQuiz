@@ -187,6 +187,10 @@ export default function HostView() {
   };
 
   const handleNextQuestion = () => {
+    if (showMidLeaderboard) {
+      socket.emit('leaderboard:hide', { gamePin });
+      setShowMidLeaderboard(false);
+    }
     socket.emit('next:question', { gamePin });
   };
 
@@ -441,7 +445,7 @@ export default function HostView() {
                       />
                     </div>
                     <span className="text-gray-400 text-xs">{pct}%</span>
-                    <span className={`flex justify-center ${ANSWERS[i].textDark ? 'text-black' : 'text-white'}`}>
+                    <span className="flex justify-center text-white">
                       {(() => { const Icon = ANSWERS[i].Icon; return <Icon size={20} strokeWidth={2.5} />; })()}
                     </span>
                   </div>

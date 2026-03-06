@@ -531,7 +531,7 @@ export default function QuizBuilder() {
                       return (
                         <div
                           key={oi}
-                          className={`group relative flex items-center gap-3 p-3.5 rounded-xl border-2 transition-all duration-150 hover:scale-[1.01] ${
+                          className={`group relative flex items-start gap-3 p-3.5 rounded-xl border-2 transition-all duration-150 hover:scale-[1.01] ${
                             isCorrect
                               ? `${s.activeBg} ${s.activeBorder}`
                               : `bg-white border-slate-200 ${s.hoverBg}`
@@ -547,12 +547,12 @@ export default function QuizBuilder() {
                             {isCorrect ? <Check size={16} strokeWidth={3} /> : s.letter}
                           </button>
 
-                          <input
-                            type="text"
+                          <textarea
                             value={opt.text}
                             onChange={e => updateOption(activeQ, oi, { text: e.target.value })}
-                            className="flex-1 bg-transparent border-none outline-none text-sm text-slate-800 placeholder:text-slate-300 font-medium"
+                            className="flex-1 bg-transparent border-none outline-none text-sm text-slate-800 placeholder:text-slate-300 font-medium resize-none leading-snug"
                             placeholder={`Antwoord ${s.letter}...`}
+                            rows={2}
                           />
 
                           {isCorrect && (
